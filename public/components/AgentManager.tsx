@@ -8,6 +8,12 @@ interface AgentManagerProps {
   onAgentsUpdate: (agents: Agent[]) => void;
 }
 
+const API_KEY_REF_FOR_PROVIDER: Record<string, string> = {
+  openai: "OPENAI_API_KEY",
+  anthropic: "ANTHROPIC_API_KEY",
+  openrouter: "OPENROUTER_API_KEY",
+};
+
 const emptyAgent: CreateAgentInput = {
   name: "",
   avatar_emoji: "🤖",
@@ -157,13 +163,14 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
             <Select.Root
               value={formData.provider}
               onValueChange={(value) =>
-                setFormData({ ...formData, provider: value as "openai" | "anthropic" })
+                setFormData({ ...formData, provider: value as "openai" | "anthropic" | "openrouter", api_key_ref: API_KEY_REF_FOR_PROVIDER[value] ?? value })
               }
             >
               <Select.Trigger style={{ width: "100%" }} />
               <Select.Content>
                 <Select.Item value="openai">OpenAI</Select.Item>
                 <Select.Item value="anthropic">Anthropic</Select.Item>
+                <Select.Item value="openrouter">OpenRouter</Select.Item>
               </Select.Content>
             </Select.Root>
           </Box>
@@ -173,14 +180,6 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
               value={formData.model}
               onChange={(e) => setFormData({ ...formData, model: e.target.value })}
               placeholder="gpt-4o"
-            />
-          </Box>
-          <Box>
-            <Text as="label" size="2" weight="medium" mb="1">API Key Env Var</Text>
-            <TextField.Root
-              value={formData.api_key_ref}
-              onChange={(e) => setFormData({ ...formData, api_key_ref: e.target.value })}
-              placeholder="OPENAI_API_KEY"
             />
           </Box>
           <Box>

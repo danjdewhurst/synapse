@@ -1,7 +1,7 @@
 import { Database } from "bun:sqlite";
 import { createAgent, getAgent, listAgents, updateAgent, deleteAgent, type CreateAgentInput } from "./db";
 
-const VALID_PROVIDERS = ["openai", "anthropic"] as const;
+const VALID_PROVIDERS = ["openai", "anthropic", "openrouter"] as const;
 
 function validateAgentInput(body: Record<string, unknown>): { error?: string; input?: CreateAgentInput } {
   const requiredFields = ["name", "avatar_emoji", "system_prompt", "provider", "model", "api_key_ref"];
@@ -24,7 +24,7 @@ function validateAgentInput(body: Record<string, unknown>): { error?: string; in
       name: String(body.name),
       avatar_emoji: String(body.avatar_emoji),
       system_prompt: String(body.system_prompt),
-      provider: provider as "openai" | "anthropic",
+      provider: provider as "openai" | "anthropic" | "openrouter",
       model: String(body.model),
       api_key_ref: String(body.api_key_ref),
       temperature,
@@ -108,7 +108,7 @@ export async function handleUpdateAgent(
     if (body.name !== undefined) updates.name = String(body.name);
     if (body.avatar_emoji !== undefined) updates.avatar_emoji = String(body.avatar_emoji);
     if (body.system_prompt !== undefined) updates.system_prompt = String(body.system_prompt);
-    if (body.provider !== undefined) updates.provider = body.provider as "openai" | "anthropic";
+    if (body.provider !== undefined) updates.provider = body.provider as "openai" | "anthropic" | "openrouter";
     if (body.model !== undefined) updates.model = String(body.model);
     if (body.api_key_ref !== undefined) updates.api_key_ref = String(body.api_key_ref);
     if (body.temperature !== undefined) updates.temperature = Number(body.temperature);

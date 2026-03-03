@@ -158,6 +158,37 @@ describe("Agents API", () => {
       expect(body.error).toContain("already exists");
     });
 
+    test("should create an agent with openrouter provider", async () => {
+      const request = new Request("http://localhost/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...validAgentInput, provider: "openrouter", model: "google/gemini-2.0-flash-001", api_key_ref: "OPENROUTER_API_KEY" }),
+      });
+
+      const response = await handleCreateAgent(db, request);
+
+      expect(response.status).toBe(201);
+      const body = await response.json() as Agent;
+      expect(body.provider).toBe("openrouter");
+      expect(body.model).toBe("google/gemini-2.0-flash-001");
+    });
+
+    test("should update an agent to openrouter provider", async () => {
+      const agent = createAgent(db, validAgentInput);
+
+      const request = new Request(`http://localhost/api/agents/${agent.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: "openrouter", model: "google/gemini-2.0-flash-001", api_key_ref: "OPENROUTER_API_KEY" }),
+      });
+
+      const response = await handleUpdateAgent(db, request, agent.id);
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as Agent;
+      expect(body.provider).toBe("openrouter");
+    });
+
     test("should allow creating agent with name of soft-deleted agent", async () => {
       const agent = createAgent(db, validAgentInput);
       await handleDeleteAgent(db, new Request(`http://localhost/api/agents/${agent.id}`, { method: "DELETE" }), agent.id);

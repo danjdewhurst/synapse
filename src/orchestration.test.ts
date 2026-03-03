@@ -240,6 +240,31 @@ describe("Agent Orchestration", () => {
       expect(messages[0].status).toBe("error");
     });
 
+    test("should route openrouter agents to OpenAI-compatible endpoint", async () => {
+      const thread = createThread(db, "Test Thread");
+      process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+      const agent = createAgent(db, {
+        name: "OpenRouter Agent",
+        avatar_emoji: "🌐",
+        system_prompt: "You are an openrouter agent",
+        provider: "openrouter",
+        model: "google/gemini-2.0-flash-001",
+        api_key_ref: "OPENROUTER_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent.id);
+
+      await triggerAgentResponses(db, thread.id, "Hello openrouter");
+
+      expect(fetchCalls.length).toBeGreaterThanOrEqual(1);
+      expect(fetchCalls[0].url).toContain("openrouter.ai/api/v1/chat/completions");
+
+      const messages = getMessages(db, thread.id);
+      expect(messages.length).toBe(1);
+      expect(messages[0].content).toBe("Mocked AI response");
+      expect(messages[0].status).toBe("complete");
+    });
+
     test("should include conversation history in API call", async () => {
       const thread = createThread(db, "Test Thread");
       const agent = createAgent(db, {

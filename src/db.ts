@@ -23,7 +23,7 @@ export interface Agent {
   name: string;
   avatar_emoji: string;
   system_prompt: string;
-  provider: "openai" | "anthropic";
+  provider: "openai" | "anthropic" | "openrouter";
   model: string;
   api_key_ref: string;
   temperature: number;
@@ -35,7 +35,7 @@ export interface CreateAgentInput {
   name: string;
   avatar_emoji: string;
   system_prompt: string;
-  provider: "openai" | "anthropic";
+  provider: "openai" | "anthropic" | "openrouter";
   model: string;
   api_key_ref: string;
   temperature?: number;
@@ -63,7 +63,7 @@ export function initDb(db: Database): void {
       name TEXT NOT NULL,
       avatar_emoji TEXT NOT NULL,
       system_prompt TEXT NOT NULL,
-      provider TEXT NOT NULL CHECK (provider IN ('openai', 'anthropic')),
+      provider TEXT NOT NULL CHECK (provider IN ('openai', 'anthropic', 'openrouter')),
       model TEXT NOT NULL,
       api_key_ref TEXT NOT NULL,
       temperature REAL DEFAULT 0.7,
@@ -106,6 +106,30 @@ export function initDb(db: Database): void {
       UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.thread_id;
     END
   `);
+
+  // Migration: add 'openrouter' to agents provider CHECK constraint
+  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'").get() as { sql: string } | undefined;
+  if (tableInfo && !tableInfo.sql.includes("openrouter")) {
+    db.exec("PRAGMA foreign_keys = OFF");
+    db.exec(`
+      CREATE TABLE agents_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        avatar_emoji TEXT NOT NULL,
+        system_prompt TEXT NOT NULL,
+        provider TEXT NOT NULL CHECK (provider IN ('openai', 'anthropic', 'openrouter')),
+        model TEXT NOT NULL,
+        api_key_ref TEXT NOT NULL,
+        temperature REAL DEFAULT 0.7,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    db.exec("INSERT INTO agents_new SELECT * FROM agents");
+    db.exec("DROP TABLE agents");
+    db.exec("ALTER TABLE agents_new RENAME TO agents");
+    db.exec("PRAGMA foreign_keys = ON");
+  }
 
   // Indexes for common queries
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)");

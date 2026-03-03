@@ -101,6 +101,40 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
   return data.content[0].text;
 }
 
+async function callOpenRouter(agent: Agent, messages: ChatCompletionMessage[]): Promise<string> {
+  const apiKey = process.env[agent.api_key_ref];
+  if (!apiKey) {
+    throw new Error(`API key not found: ${agent.api_key_ref}`);
+  }
+
+  const baseUrl = process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api";
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: agent.model,
+      messages,
+      temperature: agent.temperature,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(
+      `OpenRouter API error: ${response.status}`,
+      response.status,
+      parseRetryAfter(response)
+    );
+  }
+
+  const data = await response.json() as {
+    choices: [{ message: { content: string } }];
+  };
+  return data.choices[0].message.content;
+}
+
 async function callAgentWithRetry(
   agent: Agent,
   messages: ChatCompletionMessage[],
@@ -114,6 +148,8 @@ async function callAgentWithRetry(
 
       if (agent.provider === "openai") {
         content = await callOpenAI(agent, messages);
+      } else if (agent.provider === "openrouter") {
+        content = await callOpenRouter(agent, messages);
       } else {
         content = await callAnthropic(agent, messages);
       }

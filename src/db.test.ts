@@ -246,6 +246,42 @@ describe("Database Schema", () => {
     });
   });
 
+  describe("openrouter provider", () => {
+    test("should create an agent with openrouter provider", () => {
+      const agent = createAgent(db, {
+        name: "OpenRouter Agent",
+        avatar_emoji: "🌐",
+        system_prompt: "You are an openrouter agent",
+        provider: "openrouter",
+        model: "google/gemini-2.0-flash-001",
+        api_key_ref: "OPENROUTER_API_KEY",
+      });
+
+      expect(agent.provider).toBe("openrouter");
+      expect(agent.model).toBe("google/gemini-2.0-flash-001");
+    });
+
+    test("should preserve existing agents after migration adds openrouter", () => {
+      // Create agent with old schema (openai/anthropic only)
+      const agent = createAgent(db, {
+        name: "Existing Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "I existed before the migration",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      // Re-run initDb to simulate migration
+      initDb(db);
+
+      const retrieved = getAgent(db, agent.id);
+      expect(retrieved).not.toBeNull();
+      expect(retrieved!.name).toBe("Existing Agent");
+      expect(retrieved!.provider).toBe("openai");
+    });
+  });
+
   describe("indexes", () => {
     test("should create indexes on messages and thread_agents tables", () => {
       const messageIndexes = db.prepare("PRAGMA index_list('messages')").all() as { name: string }[];
