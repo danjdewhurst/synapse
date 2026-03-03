@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Button, TextField, TextArea, Select, Card, Flex, Grid, Text, Box } from "@radix-ui/themes";
 import type { Agent, CreateAgentInput } from "../types";
 import * as api from "../api";
 
@@ -88,150 +89,130 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
 
   return (
     <div className="agent-manager">
-      <h2>🤖 Agents</h2>
+      <Text size="5" weight="bold" mb="3" as="p">🤖 Agents</Text>
 
-      <div className="agent-list">
+      <Flex direction="column" gap="3" mb="4">
         {activeAgents.length === 0 ? (
-          <p>No agents configured yet.</p>
+          <Text color="gray">No agents configured yet.</Text>
         ) : (
           activeAgents.map((agent) => (
-            <div key={agent.id} className="agent-card">
-              <div className="agent-card-header">
-                <span className="agent-card-name">{agent.name}</span>
-                <span className="agent-card-emoji">{agent.avatar_emoji}</span>
-              </div>
-              <div className="agent-card-meta">
-                {agent.provider} / {agent.model} • temp: {agent.temperature}
-              </div>
-              <div className="agent-card-actions">
-                <button
-                  className="outline"
-                  onClick={() => handleEdit(agent)}
-                >
+            <Card key={agent.id}>
+              <Flex justify="between" align="center" mb="1">
+                <Text weight="medium" size="3">{agent.name}</Text>
+                <Text size="5">{agent.avatar_emoji}</Text>
+              </Flex>
+              <Text size="1" color="gray" mb="2" as="p">
+                {agent.provider} / {agent.model} &bull; temp: {agent.temperature}
+              </Text>
+              <Flex gap="2">
+                <Button variant="outline" size="1" onClick={() => handleEdit(agent)}>
                   Edit
-                </button>
-                <button
-                  className="outline secondary"
-                  onClick={() => handleDelete(agent.id)}
-                >
+                </Button>
+                <Button variant="outline" color="red" size="1" onClick={() => handleDelete(agent.id)}>
                   Delete
-                </button>
-              </div>
-            </div>
+                </Button>
+              </Flex>
+            </Card>
           ))
         )}
-      </div>
+      </Flex>
 
-      <div className="agent-form">
-        <h3>{isEditing ? "Edit Agent" : "Create Agent"}</h3>
+      <Card>
+        <Text size="3" weight="bold" mb="3" as="p">
+          {isEditing ? "Edit Agent" : "Create Agent"}
+        </Text>
 
-        <div className="grid">
-          <div>
-            <label>Name</label>
-            <input
-              type="text"
+        <Grid columns="2" gap="3" mb="3">
+          <Box>
+            <Text as="label" size="2" weight="medium" mb="1">Name</Text>
+            <TextField.Root
               value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="Agent name"
             />
-          </div>
-          <div>
-            <label>Emoji</label>
-            <input
-              type="text"
+          </Box>
+          <Box>
+            <Text as="label" size="2" weight="medium" mb="1">Emoji</Text>
+            <TextField.Root
               value={formData.avatar_emoji}
-              onChange={(e) =>
-                setFormData({ ...formData, avatar_emoji: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, avatar_emoji: e.target.value })}
               placeholder="🤖"
             />
-          </div>
-        </div>
+          </Box>
+        </Grid>
 
-        <label>System Prompt</label>
-        <textarea
-          value={formData.system_prompt}
-          onChange={(e) =>
-            setFormData({ ...formData, system_prompt: e.target.value })
-          }
-          placeholder="You are a helpful assistant..."
-        />
+        <Box mb="3">
+          <Text as="label" size="2" weight="medium" mb="1">System Prompt</Text>
+          <TextArea
+            value={formData.system_prompt}
+            onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
+            placeholder="You are a helpful assistant..."
+            style={{ minHeight: 100 }}
+          />
+        </Box>
 
-        <div className="grid">
-          <div>
-            <label>Provider</label>
-            <select
+        <Grid columns="2" gap="3" mb="3">
+          <Box>
+            <Text as="label" size="2" weight="medium" mb="1">Provider</Text>
+            <Select.Root
               value={formData.provider}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  provider: e.target.value as "openai" | "anthropic",
-                })
+              onValueChange={(value) =>
+                setFormData({ ...formData, provider: value as "openai" | "anthropic" })
               }
             >
-              <option value="openai">OpenAI</option>
-              <option value="anthropic">Anthropic</option>
-            </select>
-          </div>
-          <div>
-            <label>Model</label>
-            <input
-              type="text"
+              <Select.Trigger style={{ width: "100%" }} />
+              <Select.Content>
+                <Select.Item value="openai">OpenAI</Select.Item>
+                <Select.Item value="anthropic">Anthropic</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </Box>
+          <Box>
+            <Text as="label" size="2" weight="medium" mb="1">Model</Text>
+            <TextField.Root
               value={formData.model}
-              onChange={(e) =>
-                setFormData({ ...formData, model: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, model: e.target.value })}
               placeholder="gpt-4o"
             />
-          </div>
-        </div>
+          </Box>
+        </Grid>
 
-        <div className="grid">
-          <div>
-            <label>API Key Environment Variable</label>
-            <input
-              type="text"
+        <Grid columns="2" gap="3" mb="3">
+          <Box>
+            <Text as="label" size="2" weight="medium" mb="1">API Key Env Var</Text>
+            <TextField.Root
               value={formData.api_key_ref}
-              onChange={(e) =>
-                setFormData({ ...formData, api_key_ref: e.target.value })
-              }
+              onChange={(e) => setFormData({ ...formData, api_key_ref: e.target.value })}
               placeholder="OPENAI_API_KEY"
             />
-          </div>
-          <div>
-            <label>Temperature</label>
-            <input
+          </Box>
+          <Box>
+            <Text as="label" size="2" weight="medium" mb="1">Temperature</Text>
+            <TextField.Root
               type="number"
               min="0"
               max="2"
               step="0.1"
-              value={formData.temperature}
+              value={String(formData.temperature)}
               onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  temperature: parseFloat(e.target.value),
-                })
+                setFormData({ ...formData, temperature: parseFloat(e.target.value) })
               }
             />
-          </div>
-        </div>
+          </Box>
+        </Grid>
 
-        <div className="agent-form-actions">
+        <Flex gap="2" justify="end">
           {isEditing && (
-            <button className="outline" onClick={handleCancel}>
-              Cancel
-            </button>
+            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
           )}
-          <button
+          <Button
             onClick={handleSave}
             disabled={isSaving || !formData.name.trim()}
           >
             {isSaving ? "Saving..." : isEditing ? "Update" : "Create"}
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Flex>
+      </Card>
     </div>
   );
 }

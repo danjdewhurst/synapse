@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { Button, TextField, Flex, Text, Popover, Checkbox } from "@radix-ui/themes";
 import type { Thread, Message, Agent } from "../types";
 
 interface ThreadViewProps {
@@ -28,10 +29,8 @@ export function ThreadView({
 }: ThreadViewProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [showAgentPicker, setShowAgentPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
@@ -60,66 +59,67 @@ export function ThreadView({
   };
 
   const formatContent = (content: string) => {
-    // Simple markdown-like formatting
     return content
       .split("\n")
       .map((line, i) => <p key={i}>{line || <br />}</p>);
   };
 
+  const activeAgents = agents.filter(a => a.is_active);
+
   return (
     <div className="thread-view">
       <div className="thread-header">
         <h2>{thread.title}</h2>
-        <div className="thread-header-actions">
-          <div className="agent-picker-wrapper">
-            <button
-              className="outline agent-picker-toggle"
-              onClick={() => setShowAgentPicker(!showAgentPicker)}
-            >
-              Agents ({threadAgentIds.length})
-            </button>
-            {showAgentPicker && (
-              <div className="agent-picker-dropdown">
-                {agents.filter(a => a.is_active).length === 0 ? (
-                  <p className="agent-picker-empty">No agents available</p>
-                ) : (
-                  agents.filter(a => a.is_active).map(agent => (
-                    <label key={agent.id} className="agent-picker-item">
-                      <input
-                        type="checkbox"
-                        checked={threadAgentIds.includes(agent.id)}
-                        onChange={() => {
-                          const newIds = threadAgentIds.includes(agent.id)
-                            ? threadAgentIds.filter(id => id !== agent.id)
-                            : [...threadAgentIds, agent.id];
-                          onThreadAgentsChange(newIds);
-                        }}
-                      />
-                      <span>{agent.avatar_emoji} {agent.name}</span>
-                    </label>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
+        <Flex align="center" gap="2">
+          <Popover.Root>
+            <Popover.Trigger>
+              <Button variant="outline" size="1">
+                Agents ({threadAgentIds.length})
+              </Button>
+            </Popover.Trigger>
+            <Popover.Content style={{ minWidth: 200 }}>
+              {activeAgents.length === 0 ? (
+                <Text size="1" color="gray">No agents available</Text>
+              ) : (
+                <Flex direction="column" gap="2">
+                  {activeAgents.map(agent => (
+                    <Flex key={agent.id} align="center" gap="2" asChild>
+                      <label>
+                        <Checkbox
+                          checked={threadAgentIds.includes(agent.id)}
+                          onCheckedChange={() => {
+                            const newIds = threadAgentIds.includes(agent.id)
+                              ? threadAgentIds.filter(id => id !== agent.id)
+                              : [...threadAgentIds, agent.id];
+                            onThreadAgentsChange(newIds);
+                          }}
+                        />
+                        <Text size="2">{agent.avatar_emoji} {agent.name}</Text>
+                      </label>
+                    </Flex>
+                  ))}
+                </Flex>
+              )}
+            </Popover.Content>
+          </Popover.Root>
           <span
-            className={`connection-status ${
-              isConnected ? "connected" : "disconnected"
-            }`}
+            className={`connection-status ${isConnected ? "connected" : "disconnected"}`}
           >
             {isConnected ? "● Connected" : "● Disconnected"}
           </span>
-        </div>
+        </Flex>
       </div>
 
       <div className="messages-container">
         {hasMoreMessages && (
-          <button
-            className="outline load-earlier-btn"
+          <Button
+            variant="outline"
+            size="1"
             onClick={onLoadEarlierMessages}
+            style={{ alignSelf: "center", marginBottom: "0.5rem" }}
           >
             Load earlier messages
-          </button>
+          </Button>
         )}
         {messages.length === 0 ? (
           <div className="empty-state">
@@ -158,16 +158,16 @@ export function ThreadView({
       </div>
 
       <form onSubmit={handleSubmit} className="message-input-container">
-        <input
-          type="text"
+        <TextField.Root
+          style={{ flex: 1 }}
           placeholder="Type a message..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
           disabled={isLoading || !isConnected}
         />
-        <button type="submit" disabled={isLoading || !input.trim()}>
+        <Button type="submit" disabled={isLoading || !input.trim()}>
           {isLoading ? "Sending..." : "Send"}
-        </button>
+        </Button>
       </form>
     </div>
   );

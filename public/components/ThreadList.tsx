@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { TextField, Button, Flex } from "@radix-ui/themes";
 import type { Thread } from "../types";
 import * as api from "../api";
 
@@ -51,16 +52,18 @@ export function ThreadList({
   return (
     <div className="thread-list-container">
       <form onSubmit={handleCreateThread} className="thread-form">
-        <input
-          type="text"
-          placeholder="New thread title..."
-          value={newThreadTitle}
-          onChange={(e) => setNewThreadTitle(e.target.value)}
-          disabled={isCreating}
-        />
-        <button type="submit" disabled={isCreating || !newThreadTitle.trim()}>
-          {isCreating ? "Creating..." : "+ New"}
-        </button>
+        <Flex gap="2" p="2">
+          <TextField.Root
+            style={{ flex: 1 }}
+            placeholder="New thread title..."
+            value={newThreadTitle}
+            onChange={(e) => setNewThreadTitle(e.target.value)}
+            disabled={isCreating}
+          />
+          <Button type="submit" disabled={isCreating || !newThreadTitle.trim()}>
+            {isCreating ? "Creating..." : "+ New"}
+          </Button>
+        </Flex>
       </form>
 
       <div className="thread-list">

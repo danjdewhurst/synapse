@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import { Theme, Button } from "@radix-ui/themes";
+import "@radix-ui/themes/styles.css";
 import type { Thread, Message, Agent } from "./types";
 import { ThreadList } from "./components/ThreadList";
 import { ThreadView } from "./components/ThreadView";
@@ -106,12 +108,12 @@ function App() {
       <aside className="sidebar">
         <div className="sidebar-header">
           <h1>🧠 Synapse</h1>
-          <button
-            className="outline"
+          <Button
+            variant="outline"
             onClick={() => setShowAgentManager(!showAgentManager)}
           >
             {showAgentManager ? "← Back" : "🤖 Agents"}
-          </button>
+          </Button>
         </div>
 
         {showAgentManager ? (
@@ -156,6 +158,8 @@ function App() {
 const root = createRoot(document.getElementById("root")!);
 root.render(
   <ErrorBoundary>
-    <App />
+    <Theme appearance="dark" accentColor="indigo">
+      <App />
+    </Theme>
   </ErrorBoundary>
 );
