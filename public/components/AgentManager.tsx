@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Button, TextField, TextArea, Select, Card, Flex, Grid, Text, Box } from "@radix-ui/themes";
+import { Button, TextField, TextArea, Select, Card, Flex, Text, Box } from "@radix-ui/themes";
 import type { Agent, CreateAgentInput } from "../types";
 import * as api from "../api";
 
@@ -122,7 +122,7 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
           {isEditing ? "Edit Agent" : "Create Agent"}
         </Text>
 
-        <Grid columns="2" gap="3" mb="3">
+        <Flex direction="column" gap="3" mb="3">
           <Box>
             <Text as="label" size="2" weight="medium" mb="1">Name</Text>
             <TextField.Root
@@ -139,7 +139,7 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
               placeholder="🤖"
             />
           </Box>
-        </Grid>
+        </Flex>
 
         <Box mb="3">
           <Text as="label" size="2" weight="medium" mb="1">System Prompt</Text>
@@ -151,7 +151,7 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
           />
         </Box>
 
-        <Grid columns="2" gap="3" mb="3">
+        <Flex direction="column" gap="3" mb="3">
           <Box>
             <Text as="label" size="2" weight="medium" mb="1">Provider</Text>
             <Select.Root
@@ -175,9 +175,6 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
               placeholder="gpt-4o"
             />
           </Box>
-        </Grid>
-
-        <Grid columns="2" gap="3" mb="3">
           <Box>
             <Text as="label" size="2" weight="medium" mb="1">API Key Env Var</Text>
             <TextField.Root
@@ -199,7 +196,7 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
               }
             />
           </Box>
-        </Grid>
+        </Flex>
 
         <Flex gap="2" justify="end">
           {isEditing && (

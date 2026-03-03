@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Button, TextField, Flex, Text, Popover, Checkbox } from "@radix-ui/themes";
+import { Button, Flex, Text, Popover, Checkbox } from "@radix-ui/themes";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type { Thread, Message, Agent } from "../types";
 
 interface ThreadViewProps {
@@ -15,6 +17,12 @@ interface ThreadViewProps {
   onLoadEarlierMessages: () => void;
 }
 
+/** Deterministic hue from agent ID for colour-coding */
+function agentHue(agentId: number): number {
+  // Golden-angle distribution gives well-spaced hues
+  return (agentId * 137.508) % 360;
+}
+
 export function ThreadView({
   thread,
   messages,
@@ -28,27 +36,32 @@ export function ThreadView({
   onLoadEarlierMessages,
 }: ThreadViewProps) {
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  // Auto-resize textarea
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`;
+  }, [input]);
 
-    const content = input.trim();
+  const handleSend = () => {
+    if (!input.trim()) return;
+    onSendMessage(input.trim());
     setInput("");
-    setIsLoading(true);
+  };
 
-    try {
-      await onSendMessage(content);
-    } catch (error) {
-      console.error("Failed to send message:", error);
-    } finally {
-      setIsLoading(false);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter or Ctrl/Cmd+Enter sends; Shift+Enter inserts newline
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
     }
   };
 
@@ -56,12 +69,6 @@ export function ThreadView({
     if (!agentId) return "You";
     const agent = agents.find((a) => a.id === agentId);
     return agent ? `${agent.avatar_emoji} ${agent.name}` : "Unknown";
-  };
-
-  const formatContent = (content: string) => {
-    return content
-      .split("\n")
-      .map((line, i) => <p key={i}>{line || <br />}</p>);
   };
 
   const activeAgents = agents.filter(a => a.is_active);
@@ -132,12 +139,21 @@ export function ThreadView({
               className={`message ${message.role} ${
                 message.status === "error" ? "error" : ""
               }`}
+              style={
+                message.agent_id
+                  ? ({ "--agent-hue": agentHue(message.agent_id) } as React.CSSProperties)
+                  : undefined
+              }
             >
               <div className="message-header">
-                {getAgentName(message.agent_id)}
+                <span className={message.agent_id ? "agent-label" : ""}>
+                  {getAgentName(message.agent_id)}
+                </span>
               </div>
               <div className="message-content">
-                {formatContent(message.content)}
+                <Markdown remarkPlugins={[remarkGfm]}>
+                  {message.content}
+                </Markdown>
               </div>
             </div>
           ))
@@ -157,18 +173,21 @@ export function ThreadView({
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="message-input-container">
-        <TextField.Root
-          style={{ flex: 1 }}
-          placeholder="Type a message..."
+      <div className="message-input-container">
+        <textarea
+          ref={textareaRef}
+          className="message-textarea"
+          placeholder="Type a message… (Shift+Enter for new line)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={isLoading || !isConnected}
+          onKeyDown={handleKeyDown}
+          disabled={!isConnected}
+          rows={1}
         />
-        <Button type="submit" disabled={isLoading || !input.trim()}>
-          {isLoading ? "Sending..." : "Send"}
+        <Button onClick={handleSend} disabled={!input.trim() || !isConnected}>
+          Send
         </Button>
-      </form>
+      </div>
     </div>
   );
 }

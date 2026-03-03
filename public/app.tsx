@@ -11,6 +11,8 @@ import { useWebSocket } from "./useWebSocket";
 import * as api from "./api";
 import "./styles.css";
 
+const PAGE_SIZE = 100;
+
 function App() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
@@ -20,6 +22,7 @@ function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [threadAgentIds, setThreadAgentIds] = useState<number[]>([]);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || null;
 
@@ -31,10 +34,10 @@ function App() {
     }
     let cancelled = false;
 
-    api.getMessages(activeThreadId, { limit: 100 }).then(data => {
+    api.getMessages(activeThreadId, { limit: PAGE_SIZE }).then(data => {
       if (!cancelled) {
         setMessages(data);
-        setHasMoreMessages(data.length === 100);
+        setHasMoreMessages(data.length === PAGE_SIZE);
       }
     }).catch(err => console.error("Failed to load messages:", err));
 
@@ -47,7 +50,6 @@ function App() {
 
   const handleNewMessage = useCallback((message: Message) => {
     setMessages((prev) => {
-      // Avoid duplicates
       if (prev.find((m) => m.id === message.id)) {
         return prev;
       }
@@ -72,6 +74,7 @@ function App() {
   const handleThreadSelect = (threadId: number) => {
     setActiveThreadId(threadId);
     setMessages([]);
+    setSidebarOpen(false);
   };
 
   const handleThreadsUpdate = (updatedThreads: Thread[]) => {
@@ -85,9 +88,12 @@ function App() {
   const handleLoadEarlierMessages = async () => {
     if (!activeThreadId) return;
     try {
-      const allMessages = await api.getMessages(activeThreadId);
-      setMessages(allMessages);
-      setHasMoreMessages(false);
+      const earlier = await api.getMessages(activeThreadId, {
+        limit: PAGE_SIZE,
+        offset: messages.length,
+      });
+      setMessages((prev) => [...earlier, ...prev]);
+      setHasMoreMessages(earlier.length === PAGE_SIZE);
     } catch (error) {
       console.error("Failed to load earlier messages:", error);
     }
@@ -105,7 +111,20 @@ function App() {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <button
+        className="sidebar-toggle"
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        aria-label="Toggle sidebar"
+      >
+        ☰
+      </button>
+
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? "visible" : ""}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-header">
           <h1>🧠 Synapse</h1>
           <Button
@@ -147,6 +166,12 @@ function App() {
           />
         ) : (
           <div className="empty-state">
+            <div className="empty-state-graphic">
+              <div className="empty-state-node" />
+              <div className="empty-state-node" />
+              <div className="empty-state-node" />
+              <div className="empty-state-node" />
+            </div>
             <p>Select a thread or create a new one to start chatting</p>
           </div>
         )}
