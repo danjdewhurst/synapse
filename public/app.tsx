@@ -19,7 +19,7 @@ function App() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [showAgentManager, setShowAgentManager] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
+  const [typingAgentIds, setTypingAgentIds] = useState<number[]>([]);
   const [threadAgentIds, setThreadAgentIds] = useState<number[]>([]);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -57,8 +57,8 @@ function App() {
     });
   }, []);
 
-  const handleTyping = useCallback((typing: boolean) => {
-    setIsTyping(typing);
+  const handleTyping = useCallback((agentIds: number[]) => {
+    setTypingAgentIds(agentIds);
   }, []);
 
   const { isConnected, sendMessage } = useWebSocket({
@@ -157,7 +157,7 @@ function App() {
             messages={messages}
             agents={agents}
             threadAgentIds={threadAgentIds}
-            isTyping={isTyping}
+            typingAgentIds={typingAgentIds}
             isConnected={isConnected}
             hasMoreMessages={hasMoreMessages}
             onSendMessage={handleSendMessage}

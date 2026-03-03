@@ -1,6 +1,8 @@
 import { Database } from "bun:sqlite";
 import { getAgentsForThread, createMessage, getMessages, type Agent, type Message } from "./db";
 
+export type OnMessageCallback = (message: Message) => void;
+
 export const MAX_CONTEXT_MESSAGES = 50;
 
 interface ChatCompletionMessage {
@@ -211,7 +213,8 @@ function buildConversationHistory(
 export async function triggerAgentResponses(
   db: Database,
   threadId: number,
-  userMessage: string
+  userMessage: string,
+  onMessage?: OnMessageCallback
 ): Promise<void> {
   const agents = getAgentsForThread(db, threadId);
 
@@ -224,7 +227,8 @@ export async function triggerAgentResponses(
     const messages = buildConversationHistory(db, threadId, agent, userMessage);
     const result = await callAgentWithRetry(agent, messages);
 
-    createMessage(db, threadId, "agent", agent.id, result.content, result.status);
+    const message = createMessage(db, threadId, "agent", agent.id, result.content, result.status);
+    onMessage?.(message);
   });
 
   await Promise.all(promises);

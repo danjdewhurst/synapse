@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import type { Database } from "bun:sqlite";
-import { createMessage, getThread, getMessages, getAgentsForThread, type Message } from "./db";
+import { createMessage, getThread, getAgentsForThread } from "./db";
 import { triggerAgentResponses } from "./orchestration";
 
 interface WebSocketData {
@@ -112,33 +112,28 @@ export class WebSocketManager {
     const agents = getAgentsForThread(this.db, threadId);
     if (agents.length === 0) return;
 
+    const typingAgentIds = new Set<number>(agents.map(a => a.id));
+
     try {
-      // Track existing message count to only broadcast new ones
-      const existingMessages = getMessages(this.db, threadId);
-      const existingCount = existingMessages.length;
+      // Broadcast initial typing indicator with all agent IDs
+      this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
 
-      // Broadcast typing indicator
-      this.broadcastToThread(threadId, { type: "typing", agents: true });
+      // Trigger responses — broadcast each message as it arrives
+      await triggerAgentResponses(this.db, threadId, userMessage, (message) => {
+        this.broadcastToThread(threadId, { type: "message", message });
 
-      // Trigger responses
-      await triggerAgentResponses(this.db, threadId, userMessage);
+        // Remove agent from typing set and broadcast updated list
+        if (message.agent_id) {
+          typingAgentIds.delete(message.agent_id);
+        }
+        this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
+      });
 
-      // Get updated messages and only broadcast new agent messages
-      const allMessages = getMessages(this.db, threadId);
-      const newMessages = allMessages.slice(existingCount);
-
-      for (const msg of newMessages) {
-        this.broadcastToThread(threadId, {
-          type: "message",
-          message: msg,
-        });
-      }
-
-      // Broadcast typing stopped
-      this.broadcastToThread(threadId, { type: "typing", agents: false });
+      // Ensure typing is cleared when all agents finish
+      this.broadcastToThread(threadId, { type: "typing", agentIds: [] });
     } catch (error) {
       console.error("Error triggering agents:", error);
-      this.broadcastToThread(threadId, { type: "typing", agents: false });
+      this.broadcastToThread(threadId, { type: "typing", agentIds: [] });
     }
   }
 

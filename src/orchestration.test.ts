@@ -92,6 +92,39 @@ describe("Agent Orchestration", () => {
       expect(messages[0].status).toBe("complete");
     });
 
+    test("should call onMessage callback for each agent response", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "Callback Agent 1",
+        avatar_emoji: "🤖",
+        system_prompt: "You are agent 1",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Callback Agent 2",
+        avatar_emoji: "🤖",
+        system_prompt: "You are agent 2",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent1.id);
+      addAgentToThread(db, thread.id, agent2.id);
+
+      const receivedMessages: Array<{ agent_id: number | null; content: string }> = [];
+      await triggerAgentResponses(db, thread.id, "Hello", (message) => {
+        receivedMessages.push({ agent_id: message.agent_id, content: message.content });
+      });
+
+      expect(receivedMessages.length).toBe(2);
+      const agentIds = receivedMessages.map(m => m.agent_id).sort();
+      expect(agentIds).toEqual([agent1.id, agent2.id].sort());
+      expect(receivedMessages.every(m => m.content === "Mocked AI response")).toBe(true);
+    });
+
     test("should do nothing when thread has no agents", async () => {
       const thread = createThread(db, "Test Thread");
 

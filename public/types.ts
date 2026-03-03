@@ -45,6 +45,6 @@ export interface CreateAgentInput {
 export interface WebSocketMessage {
   type: "message" | "typing" | "error";
   message?: Message;
-  agents?: boolean;
+  agentIds?: number[];
   error?: string;
 }

@@ -9,7 +9,7 @@ interface ThreadViewProps {
   messages: Message[];
   agents: Agent[];
   threadAgentIds: number[];
-  isTyping: boolean;
+  typingAgentIds: number[];
   isConnected: boolean;
   hasMoreMessages: boolean;
   onSendMessage: (content: string) => void;
@@ -28,7 +28,7 @@ export function ThreadView({
   messages,
   agents,
   threadAgentIds,
-  isTyping,
+  typingAgentIds,
   isConnected,
   hasMoreMessages,
   onSendMessage,
@@ -41,7 +41,7 @@ export function ThreadView({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, typingAgentIds]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -161,9 +161,17 @@ export function ThreadView({
           ))
         )}
 
-        {isTyping && (
+        {typingAgentIds.length > 0 && (
           <div className="typing-indicator">
-            <span>Agents are thinking</span>
+            <span>
+              {typingAgentIds
+                .map(id => {
+                  const agent = agents.find(a => a.id === id);
+                  return agent ? `${agent.avatar_emoji} ${agent.name}` : "Agent";
+                })
+                .join(", ")}{" "}
+              {typingAgentIds.length === 1 ? "is" : "are"} thinking
+            </span>
             <div className="typing-dots">
               <span></span>
               <span></span>

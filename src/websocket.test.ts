@@ -148,6 +148,56 @@ describe("WebSocket Manager", () => {
       expect(typingMessages).toHaveLength(0);
     });
 
+    test("should broadcast per-agent typing indicators and individual messages", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Typing Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "Test",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      addAgentToThread(db, thread.id, agent.id);
+
+      process.env.OPENAI_API_KEY = "test-key";
+      globalThis.fetch = Object.assign(
+        async () => new Response(
+          JSON.stringify({ choices: [{ message: { content: "AI response" } }] }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        ),
+        { preconnect: undefined, writable: true }
+      ) as typeof globalThis.fetch;
+
+      const sentMessages: string[] = [];
+      const mockWs = {
+        send: (msg: string) => sentMessages.push(msg),
+        data: { threadId: thread.id }
+      } as unknown as ServerWebSocket<{ threadId: number }>;
+
+      wsManager.joinThread(mockWs, thread.id);
+      await wsManager.handleClientMessage(mockWs, JSON.stringify({ content: "Hello" }));
+
+      // Wait for async triggerAgents to complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      const parsed = sentMessages.map(m => JSON.parse(m));
+
+      // Should have initial typing with agentIds
+      const typingStart = parsed.find(m => m.type === "typing" && m.agentIds?.length > 0);
+      expect(typingStart).toBeDefined();
+      expect(typingStart.agentIds).toContain(agent.id);
+
+      // Should have agent message broadcast individually
+      const agentMessage = parsed.find(m => m.type === "message" && m.message?.role === "agent");
+      expect(agentMessage).toBeDefined();
+      expect(agentMessage.message.content).toBe("AI response");
+
+      // Should end with empty typing
+      const lastTyping = parsed.filter(m => m.type === "typing").pop();
+      expect(lastTyping.agentIds).toEqual([]);
+    });
+
     test("should return error when not in a thread", async () => {
       const mockWs = {
         send: (msg: string) => {},

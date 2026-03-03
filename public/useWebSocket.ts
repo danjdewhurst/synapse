@@ -4,7 +4,7 @@ import type { Message, WebSocketMessage } from "./types";
 interface UseWebSocketOptions {
   threadId: number | null;
   onMessage: (message: Message) => void;
-  onTyping: (isTyping: boolean) => void;
+  onTyping: (agentIds: number[]) => void;
 }
 
 export function useWebSocket({ threadId, onMessage, onTyping }: UseWebSocketOptions) {
@@ -31,7 +31,7 @@ export function useWebSocket({ threadId, onMessage, onTyping }: UseWebSocketOpti
         if (data.type === "message" && data.message) {
           onMessage(data.message);
         } else if (data.type === "typing") {
-          onTyping(data.agents ?? false);
+          onTyping(data.agentIds ?? []);
         }
       } catch (error) {
         console.error("Failed to parse WebSocket message:", error);
