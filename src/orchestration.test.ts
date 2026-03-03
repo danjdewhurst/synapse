@@ -1,7 +1,7 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
 import { initDb, createThread, createAgent, createMessage, addAgentToThread, setAgentsForThread, getMessages } from "./db";
-import { triggerAgentResponses, MAX_CONTEXT_MESSAGES } from "./orchestration";
+import { triggerAgentResponses, MAX_CONTEXT_MESSAGES, sanitiseName } from "./orchestration";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -434,6 +434,192 @@ describe("Agent Orchestration", () => {
       }, "concurrent");
 
       expect(receivedMessages.length).toBe(2);
+    });
+  });
+
+  describe("sanitiseName", () => {
+    test("should keep valid characters", () => {
+      expect(sanitiseName("Alice_Bot-1")).toBe("Alice_Bot-1");
+    });
+
+    test("should replace spaces with underscores", () => {
+      expect(sanitiseName("My Agent")).toBe("My_Agent");
+    });
+
+    test("should strip invalid characters", () => {
+      expect(sanitiseName("Agent @#$% 123!")).toBe("Agent__123");
+    });
+
+    test("should truncate to 64 characters", () => {
+      const longName = "A".repeat(100);
+      expect(sanitiseName(longName).length).toBe(64);
+    });
+
+    test("should handle empty string after sanitisation", () => {
+      expect(sanitiseName("@#$")).toBe("agent");
+    });
+  });
+
+  describe("message attribution", () => {
+    test("should set name field on other agents' messages for openai provider", async () => {
+      const thread = createThread(db, "Test Thread");
+      const currentAgent = createAgent(db, {
+        name: "Current Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are the current agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const otherAgent = createAgent(db, {
+        name: "Other Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are the other agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, currentAgent.id);
+      addAgentToThread(db, thread.id, otherAgent.id);
+
+      // Create existing messages: one from current agent, one from other
+      createMessage(db, thread.id, "user", null, "Hello");
+      createMessage(db, thread.id, "agent", otherAgent.id, "I am the other agent");
+      createMessage(db, thread.id, "agent", currentAgent.id, "I am the current agent");
+
+      await triggerAgentResponses(db, thread.id, "New message");
+
+      // Find the fetch call for the current agent (system prompt match)
+      const currentAgentCall = fetchCalls.find(c => {
+        const body = c.body as { messages: Array<{ role: string; content: string }> };
+        return body.messages[0]?.content === "You are the current agent";
+      });
+
+      expect(currentAgentCall).toBeDefined();
+      const messages = (currentAgentCall!.body as { messages: Array<{ role: string; content: string; name?: string }> }).messages;
+
+      // Other agent's message should have name field
+      const otherAgentMsg = messages.find(m => m.content === "I am the other agent");
+      expect(otherAgentMsg).toBeDefined();
+      expect(otherAgentMsg!.name).toBe("Other_Agent");
+
+      // Current agent's own message should NOT have name field
+      const currentAgentMsg = messages.find(m => m.content === "I am the current agent");
+      expect(currentAgentMsg).toBeDefined();
+      expect(currentAgentMsg!.name).toBeUndefined();
+    });
+
+    test("should prefix content for other agents' messages for anthropic provider", async () => {
+      const thread = createThread(db, "Test Thread");
+      const currentAgent = createAgent(db, {
+        name: "Claude Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are the claude agent",
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        api_key_ref: "ANTHROPIC_API_KEY",
+      });
+      const otherAgent = createAgent(db, {
+        name: "Other Bot",
+        avatar_emoji: "🤖",
+        system_prompt: "You are the other bot",
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        api_key_ref: "ANTHROPIC_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, currentAgent.id);
+      addAgentToThread(db, thread.id, otherAgent.id);
+
+      createMessage(db, thread.id, "user", null, "Hello");
+      createMessage(db, thread.id, "agent", otherAgent.id, "I am the other bot");
+      createMessage(db, thread.id, "agent", currentAgent.id, "I am claude");
+
+      // Mock Anthropic response format
+      globalThis.fetch = Object.assign(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const url = input.toString();
+          const body = init?.body ? JSON.parse(init.body as string) : undefined;
+          fetchCalls.push({ url, body });
+
+          if (url.includes("anthropic")) {
+            return new Response(
+              JSON.stringify({ content: [{ text: "Mocked Anthropic response" }] }),
+              { status: 200, headers: { "Content-Type": "application/json" } }
+            );
+          }
+          return new Response(
+            JSON.stringify({ choices: [{ message: { content: "Mocked response" } }] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        },
+        { preconnect: undefined, writable: true }
+      ) as typeof globalThis.fetch;
+
+      await triggerAgentResponses(db, thread.id, "New message");
+
+      // Find the Anthropic call for the current agent
+      const currentAgentCall = fetchCalls.find(c => {
+        const body = c.body as { system?: string; messages: Array<{ role: string; content: string }> };
+        return body.system === "You are the claude agent";
+      });
+
+      expect(currentAgentCall).toBeDefined();
+      const msgs = (currentAgentCall!.body as { messages: Array<{ role: string; content: string; name?: string }> }).messages;
+
+      // Other agent's message should have prefixed content
+      const otherAgentMsg = msgs.find(m => m.content.includes("I am the other bot"));
+      expect(otherAgentMsg).toBeDefined();
+      expect(otherAgentMsg!.content).toBe("[Other Bot]: I am the other bot");
+
+      // Current agent's own message should NOT be prefixed
+      const currentAgentMsg = msgs.find(m => m.content.includes("I am claude"));
+      expect(currentAgentMsg).toBeDefined();
+      expect(currentAgentMsg!.content).toBe("I am claude");
+
+      // No name fields should be present on Anthropic messages
+      expect(msgs.every(m => m.name === undefined)).toBe(true);
+    });
+
+    test("should set name field on other agents' messages for openrouter provider", async () => {
+      const thread = createThread(db, "Test Thread");
+      process.env.OPENROUTER_API_KEY = "test-openrouter-key";
+      const currentAgent = createAgent(db, {
+        name: "Router Agent",
+        avatar_emoji: "🌐",
+        system_prompt: "You are the router agent",
+        provider: "openrouter",
+        model: "google/gemini-2.0-flash-001",
+        api_key_ref: "OPENROUTER_API_KEY",
+      });
+      const otherAgent = createAgent(db, {
+        name: "Helper Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are the helper",
+        provider: "openrouter",
+        model: "google/gemini-2.0-flash-001",
+        api_key_ref: "OPENROUTER_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, currentAgent.id);
+      addAgentToThread(db, thread.id, otherAgent.id);
+
+      createMessage(db, thread.id, "agent", otherAgent.id, "Hello from helper");
+
+      await triggerAgentResponses(db, thread.id, "Hey");
+
+      const currentAgentCall = fetchCalls.find(c => {
+        const body = c.body as { messages: Array<{ role: string; content: string }> };
+        return body.messages[0]?.content === "You are the router agent";
+      });
+
+      expect(currentAgentCall).toBeDefined();
+      const messages = (currentAgentCall!.body as { messages: Array<{ role: string; content: string; name?: string }> }).messages;
+
+      const otherMsg = messages.find(m => m.content === "Hello from helper");
+      expect(otherMsg).toBeDefined();
+      expect(otherMsg!.name).toBe("Helper_Agent");
     });
   });
 });

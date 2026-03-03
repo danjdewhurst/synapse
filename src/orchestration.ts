@@ -9,6 +9,13 @@ export const MAX_CONTEXT_MESSAGES = 50;
 interface ChatCompletionMessage {
   role: "system" | "user" | "assistant";
   content: string;
+  name?: string;
+}
+
+export function sanitiseName(name: string): string {
+  let sanitised = name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+  if (sanitised.length === 0) return "agent";
+  return sanitised.slice(0, 64);
 }
 
 export class ApiError extends Error {
@@ -69,9 +76,11 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
     throw new Error(`API key not found: ${agent.api_key_ref}`);
   }
 
-  // Separate system message from conversation
+  // Separate system message from conversation, strip name field
   const systemMessage = messages.find(m => m.role === "system")?.content;
-  const conversationMessages = messages.filter(m => m.role !== "system");
+  const conversationMessages = messages
+    .filter(m => m.role !== "system")
+    .map(({ name, ...rest }) => rest);
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
   const response = await fetch(`${baseUrl}/v1/messages`, {
@@ -201,7 +210,16 @@ function buildConversationHistory(
     if (msg.role === "user") {
       messages.push({ role: "user", content: msg.content });
     } else if (msg.role === "agent") {
-      messages.push({ role: "assistant", content: msg.content });
+      const isOtherAgent = msg.agent_id !== null && msg.agent_id !== agent.id;
+      if (isOtherAgent && msg.agent_name) {
+        if (agent.provider === "anthropic") {
+          messages.push({ role: "assistant", content: `[${msg.agent_name}]: ${msg.content}` });
+        } else {
+          messages.push({ role: "assistant", name: sanitiseName(msg.agent_name), content: msg.content });
+        }
+      } else {
+        messages.push({ role: "assistant", content: msg.content });
+      }
     }
   }
 
