@@ -1,4 +1,4 @@
-import type { Thread, Message, Agent, CreateAgentInput, ResponseMode } from "./types";
+import type { Thread, Message, Agent, CreateAgentInput, PresetAgent, ResponseMode } from "./types";
 
 const API_BASE = "/api";
 
@@ -70,6 +70,17 @@ export async function addMessage(threadId: number, content: string): Promise<Mes
   return fetchJson<Message>(`${API_BASE}/threads/${threadId}/messages`, {
     method: "POST",
     body: JSON.stringify({ content }),
+  });
+}
+
+// Presets
+export async function listPresets(): Promise<PresetAgent[]> {
+  return fetchJson<PresetAgent[]>(`${API_BASE}/presets`);
+}
+
+export async function createFromPreset(index: number): Promise<Agent> {
+  return fetchJson<Agent>(`${API_BASE}/presets/${index}`, {
+    method: "POST",
   });
 }
 

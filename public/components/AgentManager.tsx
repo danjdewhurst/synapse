@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button, TextField, TextArea, Select, Card, Flex, Text, Box } from "@radix-ui/themes";
-import type { Agent, CreateAgentInput } from "../types";
+import type { Agent, CreateAgentInput, PresetAgent } from "../types";
 import * as api from "../api";
 
 interface AgentManagerProps {
@@ -28,9 +28,12 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
   const [isEditing, setIsEditing] = useState<number | null>(null);
   const [formData, setFormData] = useState<CreateAgentInput>(emptyAgent);
   const [isSaving, setIsSaving] = useState(false);
+  const [presets, setPresets] = useState<PresetAgent[]>([]);
+  const [addingPreset, setAddingPreset] = useState<number | null>(null);
 
   useEffect(() => {
     loadAgents();
+    loadPresets();
   }, []);
 
   const loadAgents = async () => {
@@ -39,6 +42,27 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
       onAgentsUpdate(data);
     } catch (error) {
       console.error("Failed to load agents:", error);
+    }
+  };
+
+  const loadPresets = async () => {
+    try {
+      const data = await api.listPresets();
+      setPresets(data);
+    } catch (error) {
+      console.error("Failed to load presets:", error);
+    }
+  };
+
+  const handleAddPreset = async (index: number) => {
+    setAddingPreset(index);
+    try {
+      await api.createFromPreset(index);
+      await loadAgents();
+    } catch (error) {
+      console.error("Failed to add preset:", error);
+    } finally {
+      setAddingPreset(null);
     }
   };
 
@@ -122,6 +146,43 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
           ))
         )}
       </Flex>
+
+      {presets.length > 0 && (() => {
+        const activeNames = new Set(activeAgents.map((a) => a.name));
+        const available = presets
+          .map((p, i) => ({ ...p, index: i }))
+          .filter((p) => !activeNames.has(p.name));
+        if (available.length === 0) return null;
+        return (
+          <Box mb="4">
+            <Text size="3" weight="bold" mb="2" as="p">Add from Presets</Text>
+            <Flex gap="2" wrap="wrap">
+              {available.map((preset) => (
+                <Card key={preset.index} style={{ flex: "1 1 calc(50% - 4px)", minWidth: 160 }}>
+                  <Flex justify="between" align="start" gap="2">
+                    <Box style={{ flex: 1, minWidth: 0 }}>
+                      <Text weight="medium" size="2">
+                        {preset.avatar_emoji} {preset.name}
+                      </Text>
+                      <Text size="1" color="gray" as="p" style={{ marginTop: 2 }}>
+                        {preset.system_prompt.slice(0, 80)}...
+                      </Text>
+                    </Box>
+                    <Button
+                      size="1"
+                      variant="soft"
+                      disabled={addingPreset === preset.index}
+                      onClick={() => handleAddPreset(preset.index)}
+                    >
+                      {addingPreset === preset.index ? "Adding..." : "Add"}
+                    </Button>
+                  </Flex>
+                </Card>
+              ))}
+            </Flex>
+          </Box>
+        );
+      })()}
 
       <Card>
         <Text size="3" weight="bold" mb="3" as="p">

@@ -45,6 +45,16 @@ export interface CreateAgentInput {
   temperature?: number;
 }
 
+export interface PresetAgent {
+  name: string;
+  avatar_emoji: string;
+  system_prompt: string;
+  provider: "openai" | "anthropic" | "openrouter";
+  model: string;
+  api_key_ref: string;
+  temperature: number;
+}
+
 export interface WebSocketMessage {
   type: "message" | "typing" | "error";
   message?: Message;

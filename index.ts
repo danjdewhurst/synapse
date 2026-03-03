@@ -19,10 +19,12 @@ import {
   handleUpdateAgent,
   handleDeleteAgent,
 } from "./src/agents";
+import { seedPresets, handleListPresets, handleCreateFromPreset } from "./src/presets";
 
 // Initialise database
 const db = new Database("synapse.db");
 initDb(db);
+seedPresets(db);
 
 // Initialise WebSocket manager
 const wsManager = new WebSocketManager(db);
@@ -88,6 +90,18 @@ const server = Bun.serve({
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleAddMessage(db, req, id);
+      },
+    },
+
+    // Preset API
+    "/api/presets": {
+      GET: () => handleListPresets(db, new Request("http://localhost/api/presets")),
+    },
+    "/api/presets/:index": {
+      POST: (req) => {
+        const index = parseInt(req.params.index, 10);
+        if (isNaN(index)) return Response.json({ error: "Invalid index" }, { status: 400 });
+        return handleCreateFromPreset(db, req, index);
       },
     },
 

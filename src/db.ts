@@ -155,6 +155,7 @@ export function initDb(db: Database): void {
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_thread_agents_thread_id ON thread_agents(thread_id)");
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_active_agent_name ON agents(name) WHERE is_active = TRUE");
+
 }
 
 // Helper to convert SQLite integer booleans to JS booleans
