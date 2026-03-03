@@ -1,111 +1,97 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
+# Synapse
 
-Default to using Bun instead of Node.js.
+Multi-agent chatroom where AI personas collaborate in real-time threaded conversations. Users create threads, assign AI agents with custom system prompts and models, and agents respond concurrently via WebSocket.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+## Tech Stack
 
-## APIs
+- **Runtime:** Bun (use `bun` for everything — no Node.js, npm, vite, express, dotenv)
+- **Database:** SQLite via `bun:sqlite` (file: `synapse.db`)
+- **Backend:** `Bun.serve()` with REST routes + WebSocket
+- **Frontend:** React 19 + Radix Themes, bundled via Bun HTML imports
+- **Testing:** `bun:test`
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+## Project Structure
 
-## Testing
-
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
+```
+index.ts                  # Entry point — Bun.serve() with routes and WebSocket
+src/
+  db.ts                   # Schema, migrations, CRUD functions
+  agents.ts               # Agent REST handlers
+  threads.ts              # Thread REST handlers
+  messages.ts             # Message REST handlers
+  orchestration.ts        # LLM API calls (OpenAI, Anthropic), retry logic
+  websocket.ts            # WebSocketManager — room-based messaging
+  *.test.ts               # Co-located tests
+public/
+  index.html              # Entry HTML
+  app.tsx                 # Root React component, state management
+  api.ts                  # HTTP client wrapper
+  useWebSocket.ts         # WebSocket hook with auto-reconnect
+  styles.css              # Global styles (Radix theme variables)
+  types.ts                # Shared types (Thread, Message, Agent)
+  components/
+    ThreadList.tsx         # Sidebar thread list
+    ThreadView.tsx         # Chat interface
+    AgentManager.tsx       # Agent CRUD panel
+    ErrorBoundary.tsx      # Error boundary
 ```
 
-## Frontend
+## Database Schema
 
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
+Four tables: `threads`, `agents`, `messages`, `thread_agents` (junction).
 
-Server:
+- Agents use **soft delete** (`is_active` flag) — never hard-delete agents
+- `messages.agent_id` is nullable (SET NULL on agent delete)
+- A trigger updates `threads.updated_at` on message insert
+- Foreign keys are enabled (`PRAGMA foreign_keys = ON`)
+- Agent names are unique among active agents only
 
-```ts#index.ts
-import index from "./index.html"
+## API
 
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
+REST endpoints follow the pattern `/api/{resource}` and `/api/{resource}/:id`.
+
+```
+GET|POST       /api/threads
+GET            /api/threads/:id
+GET|PUT        /api/threads/:id/agents    # Bulk assign agents
+GET|POST       /api/threads/:id/messages  # Supports ?limit=N&offset=N
+GET|POST       /api/agents
+GET|PUT|DELETE /api/agents/:id
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+Error responses: `{ error: "message" }` with appropriate status codes (400, 404, 409).
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+## WebSocket Protocol
 
-With the following `frontend.tsx`:
+Client sends `{ "type": "join", "threadId": N }` to join a thread room, then `{ "content": "text" }` to send messages. Server broadcasts: `message`, `typing`, `error`, `joined` events.
 
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
+## Agent Orchestration
 
-// import .css files directly and it works
-import './index.css';
+- All agents assigned to a thread respond concurrently to each user message
+- Context window: system prompt + last 50 messages + new user message
+- Supports OpenAI and Anthropic API formats
+- `api_key_ref` stores an env var name, not the key itself
+- Exponential backoff retry with Retry-After header support
 
-const root = createRoot(document.body);
+## Scripts
 
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
+- `bun run dev` — hot-reload development server (port 3000)
+- `bun run start` — production server
+- `bun test` — run all tests
+- `bun run db:reset` — delete and recreate the database
+- `bun run lint` — TypeScript type check (`tsc --noEmit`)
 
-root.render(<Frontend />);
-```
+## Testing Conventions
 
-Then, run index.ts
+- Tests live alongside source files in `src/*.test.ts`
+- Database tests use `:memory:` SQLite for isolation
+- API handler tests mock HTTP requests
+- Orchestration tests mock `global.fetch`
+- `beforeEach`/`afterEach` for setup and teardown
 
-```sh
-bun --hot ./index.ts
-```
+## Code Conventions
 
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+- British English spelling (e.g., `normaliseAgent`, `initialise`)
+- Consistent error format: `{ error: "message" }`
+- HTTP 201 for created resources, 400/404/409 for errors
+- Functional style for DB operations, class for WebSocketManager
