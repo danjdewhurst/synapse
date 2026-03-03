@@ -1,7 +1,7 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, createAgent, addAgentToThread, getMessages } from "./db";
-import { triggerAgentResponses } from "./orchestration";
+import { initDb, createThread, createAgent, createMessage, addAgentToThread, getMessages } from "./db";
+import { triggerAgentResponses, MAX_CONTEXT_MESSAGES } from "./orchestration";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -132,6 +132,112 @@ describe("Agent Orchestration", () => {
 
       // Only active agent should trigger calls (may include retries)
       expect(fetchCalls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    test("should limit context to MAX_CONTEXT_MESSAGES", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Test Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are a test agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent.id);
+
+      // Create 60 existing messages (more than MAX_CONTEXT_MESSAGES)
+      for (let i = 0; i < 60; i++) {
+        createMessage(db, thread.id, "user", null, `Message ${i}`);
+      }
+
+      await triggerAgentResponses(db, thread.id, "Final message");
+
+      const requestBody = fetchCalls[0].body as { messages: Array<{ role: string; content: string }> };
+      // system (1) + last 50 existing messages + new user message (1) = 52
+      expect(requestBody.messages.length).toBe(MAX_CONTEXT_MESSAGES + 2);
+      expect(requestBody.messages[0].role).toBe("system");
+      expect(requestBody.messages[requestBody.messages.length - 1].content).toBe("Final message");
+      // First existing message should be message 10 (60 - 50 = 10)
+      expect(requestBody.messages[1].content).toBe("Message 10");
+    });
+
+    test("should retry with Retry-After header delay on 429", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Retry Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are a test agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent.id);
+
+      let callCount = 0;
+      globalThis.fetch = Object.assign(
+        async () => {
+          callCount++;
+          if (callCount === 1) {
+            return new Response(
+              JSON.stringify({ error: "Rate limited" }),
+              {
+                status: 429,
+                headers: {
+                  "Content-Type": "application/json",
+                  "Retry-After": "1",
+                },
+              }
+            );
+          }
+          return new Response(
+            JSON.stringify({ choices: [{ message: { content: "Success after retry" } }] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        },
+        { preconnect: undefined, writable: true }
+      ) as typeof globalThis.fetch;
+
+      await triggerAgentResponses(db, thread.id, "Hello");
+
+      expect(callCount).toBe(2);
+      const messages = getMessages(db, thread.id);
+      expect(messages[0].content).toBe("Success after retry");
+      expect(messages[0].status).toBe("complete");
+    });
+
+    test("should not retry on 401 authentication errors", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Auth Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are a test agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent.id);
+
+      let callCount = 0;
+      globalThis.fetch = Object.assign(
+        async () => {
+          callCount++;
+          return new Response(
+            JSON.stringify({ error: "Unauthorized" }),
+            { status: 401, headers: { "Content-Type": "application/json" } }
+          );
+        },
+        { preconnect: undefined, writable: true }
+      ) as typeof globalThis.fetch;
+
+      await triggerAgentResponses(db, thread.id, "Hello");
+
+      expect(callCount).toBe(1);
+      const messages = getMessages(db, thread.id);
+      expect(messages[0].status).toBe("error");
     });
 
     test("should include conversation history in API call", async () => {

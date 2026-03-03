@@ -1,9 +1,29 @@
 import { Database } from "bun:sqlite";
 import { getAgentsForThread, createMessage, getMessages, type Agent, type Message } from "./db";
 
+export const MAX_CONTEXT_MESSAGES = 50;
+
 interface ChatCompletionMessage {
   role: "system" | "user" | "assistant";
   content: string;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly retryAfter?: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+function parseRetryAfter(response: Response): number | undefined {
+  const header = response.headers.get("Retry-After");
+  if (!header) return undefined;
+  const seconds = Number(header);
+  return Number.isFinite(seconds) ? seconds : undefined;
 }
 
 async function callOpenAI(agent: Agent, messages: ChatCompletionMessage[]): Promise<string> {
@@ -27,7 +47,11 @@ async function callOpenAI(agent: Agent, messages: ChatCompletionMessage[]): Prom
   });
 
   if (!response.ok) {
-    throw new Error(`OpenAI API error: ${response.status}`);
+    throw new ApiError(
+      `OpenAI API error: ${response.status}`,
+      response.status,
+      parseRetryAfter(response)
+    );
   }
 
   const data = await response.json() as {
@@ -64,7 +88,11 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
   });
 
   if (!response.ok) {
-    throw new Error(`Anthropic API error: ${response.status}`);
+    throw new ApiError(
+      `Anthropic API error: ${response.status}`,
+      response.status,
+      parseRetryAfter(response)
+    );
   }
 
   const data = await response.json() as {
@@ -74,7 +102,6 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
 }
 
 async function callAgentWithRetry(
-  db: Database,
   agent: Agent,
   messages: ChatCompletionMessage[],
   maxRetries = 3
@@ -96,13 +123,17 @@ async function callAgentWithRetry(
       lastError = error instanceof Error ? error : new Error(String(error));
 
       // Don't retry on authentication errors
-      if (lastError.message.includes("401") || lastError.message.includes("403")) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         break;
       }
 
-      // Exponential backoff: wait 1s, 2s, 4s
+      // Use Retry-After header if available, otherwise exponential backoff
       if (attempt < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+        const retryAfter = error instanceof ApiError ? error.retryAfter : undefined;
+        const delayMs = retryAfter !== undefined
+          ? retryAfter * 1000
+          : 1000 * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
       }
     }
   }
@@ -123,8 +154,9 @@ function buildConversationHistory(
     { role: "system", content: agent.system_prompt },
   ];
 
-  // Get existing messages from thread
-  const existingMessages = getMessages(db, threadId);
+  // Get existing messages from thread, limited to recent context
+  const allMessages = getMessages(db, threadId);
+  const existingMessages = allMessages.slice(-MAX_CONTEXT_MESSAGES);
 
   for (const msg of existingMessages) {
     if (msg.role === "user") {
@@ -154,9 +186,9 @@ export async function triggerAgentResponses(
   // Trigger all agents concurrently
   const promises = agents.map(async (agent) => {
     const messages = buildConversationHistory(db, threadId, agent, userMessage);
-    const result = await callAgentWithRetry(db, agent, messages);
+    const result = await callAgentWithRetry(agent, messages);
 
-    createMessage(db, threadId, "agent", agent.id, result.content);
+    createMessage(db, threadId, "agent", agent.id, result.content, result.status);
   });
 
   await Promise.all(promises);

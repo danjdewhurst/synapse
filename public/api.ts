@@ -35,9 +35,28 @@ export async function getThread(id: number): Promise<Thread> {
   return fetchJson<Thread>(`${API_BASE}/threads/${id}`);
 }
 
+// Thread Agents
+export async function getThreadAgents(threadId: number): Promise<Agent[]> {
+  return fetchJson<Agent[]>(`${API_BASE}/threads/${threadId}/agents`);
+}
+
+export async function setThreadAgents(threadId: number, agentIds: number[]): Promise<Agent[]> {
+  return fetchJson<Agent[]>(`${API_BASE}/threads/${threadId}/agents`, {
+    method: "PUT",
+    body: JSON.stringify({ agent_ids: agentIds }),
+  });
+}
+
 // Messages
-export async function getMessages(threadId: number): Promise<Message[]> {
-  return fetchJson<Message[]>(`${API_BASE}/threads/${threadId}/messages`);
+export async function getMessages(
+  threadId: number,
+  options?: { limit?: number; offset?: number }
+): Promise<Message[]> {
+  const params = new URLSearchParams();
+  if (options?.limit !== undefined) params.set("limit", String(options.limit));
+  if (options?.offset !== undefined) params.set("offset", String(options.offset));
+  const query = params.toString();
+  return fetchJson<Message[]>(`${API_BASE}/threads/${threadId}/messages${query ? `?${query}` : ""}`);
 }
 
 export async function addMessage(threadId: number, content: string): Promise<Message> {

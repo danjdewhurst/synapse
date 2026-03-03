@@ -1,6 +1,6 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, getThread, listThreads, createMessage, getMessages, createAgent, getAgent, listAgents, updateAgent, deleteAgent, addAgentToThread, getAgentsForThread } from "./db";
+import { initDb, createThread, getThread, listThreads, createMessage, getMessages, createAgent, getAgent, listAgents, updateAgent, deleteAgent, addAgentToThread, getAgentsForThread, setAgentsForThread, removeAllAgentsFromThread } from "./db";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -243,6 +243,121 @@ describe("Database Schema", () => {
     test("should return false when deleting non-existent agent", () => {
       const result = deleteAgent(db, 999);
       expect(result).toBe(false);
+    });
+  });
+
+  describe("indexes", () => {
+    test("should create indexes on messages and thread_agents tables", () => {
+      const messageIndexes = db.prepare("PRAGMA index_list('messages')").all() as { name: string }[];
+      const indexNames = messageIndexes.map(i => i.name);
+      expect(indexNames).toContain("idx_messages_thread_id");
+      expect(indexNames).toContain("idx_messages_thread_created");
+
+      const taIndexes = db.prepare("PRAGMA index_list('thread_agents')").all() as { name: string }[];
+      const taIndexNames = taIndexes.map(i => i.name);
+      expect(taIndexNames).toContain("idx_thread_agents_thread_id");
+    });
+
+    test("should create unique index on active agent names", () => {
+      const agentIndexes = db.prepare("PRAGMA index_list('agents')").all() as { name: string; unique: number }[];
+      const uniqueIndex = agentIndexes.find(i => i.name === "idx_active_agent_name");
+      expect(uniqueIndex).toBeDefined();
+      expect(uniqueIndex!.unique).toBe(1);
+    });
+  });
+
+  describe("message pagination", () => {
+    test("should return all messages when no options provided", () => {
+      const thread = createThread(db, "Test Thread");
+      for (let i = 0; i < 5; i++) {
+        createMessage(db, thread.id, "user", null, `Message ${i}`);
+      }
+
+      const messages = getMessages(db, thread.id);
+      expect(messages).toHaveLength(5);
+    });
+
+    test("should respect limit option", () => {
+      const thread = createThread(db, "Test Thread");
+      for (let i = 0; i < 5; i++) {
+        createMessage(db, thread.id, "user", null, `Message ${i}`);
+      }
+
+      const messages = getMessages(db, thread.id, { limit: 3 });
+      expect(messages).toHaveLength(3);
+      expect(messages[0].content).toBe("Message 0");
+    });
+
+    test("should respect offset option", () => {
+      const thread = createThread(db, "Test Thread");
+      for (let i = 0; i < 5; i++) {
+        createMessage(db, thread.id, "user", null, `Message ${i}`);
+      }
+
+      const messages = getMessages(db, thread.id, { offset: 2 });
+      expect(messages).toHaveLength(3);
+      expect(messages[0].content).toBe("Message 2");
+    });
+
+    test("should respect both limit and offset", () => {
+      const thread = createThread(db, "Test Thread");
+      for (let i = 0; i < 10; i++) {
+        createMessage(db, thread.id, "user", null, `Message ${i}`);
+      }
+
+      const messages = getMessages(db, thread.id, { limit: 3, offset: 2 });
+      expect(messages).toHaveLength(3);
+      expect(messages[0].content).toBe("Message 2");
+      expect(messages[2].content).toBe("Message 4");
+    });
+  });
+
+  describe("agent name uniqueness", () => {
+    test("should reject duplicate active agent names", () => {
+      createAgent(db, {
+        name: "Unique Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "Prompt",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      expect(() => {
+        createAgent(db, {
+          name: "Unique Agent",
+          avatar_emoji: "🤖",
+          system_prompt: "Prompt 2",
+          provider: "openai",
+          model: "gpt-4o",
+          api_key_ref: "OPENAI_API_KEY",
+        });
+      }).toThrow();
+    });
+
+    test("should allow reusing a soft-deleted agent name", () => {
+      const agent = createAgent(db, {
+        name: "Reusable Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "Prompt",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      deleteAgent(db, agent.id);
+
+      const newAgent = createAgent(db, {
+        name: "Reusable Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "Prompt 2",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      expect(newAgent.name).toBe("Reusable Agent");
+      expect(newAgent.id).not.toBe(agent.id);
     });
   });
 

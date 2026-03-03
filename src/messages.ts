@@ -35,7 +35,7 @@ export async function handleAddMessage(
 
 export async function handleGetMessages(
   db: Database,
-  _request: Request,
+  request: Request,
   threadId: number
 ): Promise<Response> {
   // Verify thread exists
@@ -44,6 +44,14 @@ export async function handleGetMessages(
     return Response.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  const messages = getMessages(db, threadId);
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
+
+  const options: { limit?: number; offset?: number } = {};
+  if (limitParam !== null) options.limit = parseInt(limitParam, 10);
+  if (offsetParam !== null) options.offset = parseInt(offsetParam, 10);
+
+  const messages = getMessages(db, threadId, Object.keys(options).length > 0 ? options : undefined);
   return Response.json(messages);
 }

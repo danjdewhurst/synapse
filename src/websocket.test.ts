@@ -128,6 +128,26 @@ describe("WebSocket Manager", () => {
       expect(sentMessages.some(m => m.includes("error"))).toBe(true);
     });
 
+    test("should not broadcast typing when thread has no agents", async () => {
+      const thread = createThread(db, "Test Thread");
+      const messages: string[] = [];
+      const mockWs = {
+        send: (msg: string) => messages.push(msg),
+        data: { threadId: thread.id }
+      } as unknown as ServerWebSocket<{ threadId: number }>;
+
+      wsManager.joinThread(mockWs, thread.id);
+
+      await wsManager.handleClientMessage(mockWs, JSON.stringify({ content: "Hello" }));
+
+      // Wait for async triggerAgents to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Should have the user message broadcast but no typing indicator
+      const typingMessages = messages.filter(m => m.includes('"typing"'));
+      expect(typingMessages).toHaveLength(0);
+    });
+
     test("should return error when not in a thread", async () => {
       const mockWs = {
         send: (msg: string) => {},

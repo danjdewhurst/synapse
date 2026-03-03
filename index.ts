@@ -7,6 +7,8 @@ import {
   handleListThreads,
   handleCreateThread,
   handleGetThread,
+  handleGetThreadAgents,
+  handleSetThreadAgents,
 } from "./src/threads";
 import { handleGetMessages, handleAddMessage } from "./src/messages";
 import {
@@ -46,6 +48,18 @@ const server = Bun.serve({
         const id = parseInt(req.params.id, 10);
         if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleGetThread(db, req, id);
+      },
+    },
+    "/api/threads/:id/agents": {
+      GET: (req) => {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        return handleGetThreadAgents(db, req, id);
+      },
+      PUT: (req) => {
+        const id = parseInt(req.params.id, 10);
+        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        return handleSetThreadAgents(db, req, id);
       },
     },
     "/api/threads/:id/messages": {

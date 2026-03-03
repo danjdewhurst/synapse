@@ -1,6 +1,6 @@
 import type { ServerWebSocket } from "bun";
 import type { Database } from "bun:sqlite";
-import { createMessage, getThread, getMessages, type Message } from "./db";
+import { createMessage, getThread, getMessages, getAgentsForThread, type Message } from "./db";
 import { triggerAgentResponses } from "./orchestration";
 
 interface WebSocketData {
@@ -108,19 +108,26 @@ export class WebSocketManager {
   }
 
   private async triggerAgents(threadId: number, userMessage: string): Promise<void> {
+    // Check if there are any agents assigned before broadcasting typing
+    const agents = getAgentsForThread(this.db, threadId);
+    if (agents.length === 0) return;
+
     try {
+      // Track existing message count to only broadcast new ones
+      const existingMessages = getMessages(this.db, threadId);
+      const existingCount = existingMessages.length;
+
       // Broadcast typing indicator
       this.broadcastToThread(threadId, { type: "typing", agents: true });
 
       // Trigger responses
       await triggerAgentResponses(this.db, threadId, userMessage);
 
-      // Get updated messages
-      const messages = getMessages(this.db, threadId);
+      // Get updated messages and only broadcast new agent messages
+      const allMessages = getMessages(this.db, threadId);
+      const newMessages = allMessages.slice(existingCount);
 
-      // Broadcast agent responses (only new ones since last message)
-      const agentMessages = messages.filter(m => m.role === "agent");
-      for (const msg of agentMessages) {
+      for (const msg of newMessages) {
         this.broadcastToThread(threadId, {
           type: "message",
           message: msg,

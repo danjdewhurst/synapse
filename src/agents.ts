@@ -58,6 +58,9 @@ export async function handleCreateAgent(
     if (error instanceof SyntaxError) {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+      return Response.json({ error: "An active agent with this name already exists" }, { status: 409 });
+    }
     throw error;
   }
 }
@@ -120,6 +123,9 @@ export async function handleUpdateAgent(
   } catch (error) {
     if (error instanceof SyntaxError) {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
+      return Response.json({ error: "An active agent with this name already exists" }, { status: 409 });
     }
     throw error;
   }

@@ -106,6 +106,12 @@ export function initDb(db: Database): void {
       UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.thread_id;
     END
   `);
+
+  // Indexes for common queries
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_thread_agents_thread_id ON thread_agents(thread_id)");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_active_agent_name ON agents(name) WHERE is_active = TRUE");
 }
 
 // Helper to convert SQLite integer booleans to JS booleans
@@ -141,19 +147,37 @@ export function createMessage(
   threadId: number,
   role: "user" | "agent",
   agentId: number | null,
-  content: string
+  content: string,
+  status: "complete" | "error" = "complete"
 ): Message {
   const stmt = db.prepare(
-    "INSERT INTO messages (thread_id, role, agent_id, content, status) VALUES (?, ?, ?, ?, 'complete') RETURNING *"
+    "INSERT INTO messages (thread_id, role, agent_id, content, status) VALUES (?, ?, ?, ?, ?) RETURNING *"
   );
-  return stmt.get(threadId, role, agentId, content) as Message;
+  return stmt.get(threadId, role, agentId, content, status) as Message;
 }
 
-export function getMessages(db: Database, threadId: number): Message[] {
-  const stmt = db.prepare(
-    "SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at ASC"
-  );
-  return stmt.all(threadId) as Message[];
+export function getMessages(
+  db: Database,
+  threadId: number,
+  options?: { limit?: number; offset?: number }
+): Message[] {
+  let sql = "SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at ASC";
+  const params: unknown[] = [threadId];
+
+  if (options?.limit !== undefined) {
+    sql += " LIMIT ?";
+    params.push(options.limit);
+  }
+  if (options?.offset !== undefined) {
+    if (options.limit === undefined) {
+      sql += " LIMIT -1";
+    }
+    sql += " OFFSET ?";
+    params.push(options.offset);
+  }
+
+  const stmt = db.prepare(sql);
+  return stmt.all(...params as SQLQueryBindings[]) as Message[];
 }
 
 // Agent operations
@@ -261,6 +285,18 @@ export function addAgentToThread(
     "INSERT OR IGNORE INTO thread_agents (thread_id, agent_id) VALUES (?, ?)"
   );
   stmt.run(threadId, agentId);
+}
+
+export function removeAllAgentsFromThread(db: Database, threadId: number): void {
+  db.prepare("DELETE FROM thread_agents WHERE thread_id = ?").run(threadId);
+}
+
+export function setAgentsForThread(db: Database, threadId: number, agentIds: number[]): void {
+  removeAllAgentsFromThread(db, threadId);
+  const stmt = db.prepare("INSERT INTO thread_agents (thread_id, agent_id) VALUES (?, ?)");
+  for (const agentId of agentIds) {
+    stmt.run(threadId, agentId);
+  }
 }
 
 export function getAgentsForThread(db: Database, threadId: number): Agent[] {

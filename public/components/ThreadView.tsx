@@ -1,47 +1,40 @@
 import { useState, useEffect, useRef } from "react";
 import type { Thread, Message, Agent } from "../types";
-import * as api from "../api";
 
 interface ThreadViewProps {
   thread: Thread;
   messages: Message[];
   agents: Agent[];
+  threadAgentIds: number[];
   isTyping: boolean;
   isConnected: boolean;
+  hasMoreMessages: boolean;
   onSendMessage: (content: string) => void;
+  onThreadAgentsChange: (agentIds: number[]) => void;
+  onLoadEarlierMessages: () => void;
 }
 
 export function ThreadView({
   thread,
   messages,
   agents,
+  threadAgentIds,
   isTyping,
   isConnected,
+  hasMoreMessages,
   onSendMessage,
+  onThreadAgentsChange,
+  onLoadEarlierMessages,
 }: ThreadViewProps) {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Load initial messages
-  useEffect(() => {
-    loadMessages();
-  }, [thread.id]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
-
-  const loadMessages = async () => {
-    try {
-      const data = await api.getMessages(thread.id);
-      // We need to pass these up to the parent or store differently
-      // For now, just render what we have from props
-    } catch (error) {
-      console.error("Failed to load messages:", error);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,16 +70,57 @@ export function ThreadView({
     <div className="thread-view">
       <div className="thread-header">
         <h2>{thread.title}</h2>
-        <span
-          className={`connection-status ${
-            isConnected ? "connected" : "disconnected"
-          }`}
-        >
-          {isConnected ? "● Connected" : "● Disconnected"}
-        </span>
+        <div className="thread-header-actions">
+          <div className="agent-picker-wrapper">
+            <button
+              className="outline agent-picker-toggle"
+              onClick={() => setShowAgentPicker(!showAgentPicker)}
+            >
+              Agents ({threadAgentIds.length})
+            </button>
+            {showAgentPicker && (
+              <div className="agent-picker-dropdown">
+                {agents.filter(a => a.is_active).length === 0 ? (
+                  <p className="agent-picker-empty">No agents available</p>
+                ) : (
+                  agents.filter(a => a.is_active).map(agent => (
+                    <label key={agent.id} className="agent-picker-item">
+                      <input
+                        type="checkbox"
+                        checked={threadAgentIds.includes(agent.id)}
+                        onChange={() => {
+                          const newIds = threadAgentIds.includes(agent.id)
+                            ? threadAgentIds.filter(id => id !== agent.id)
+                            : [...threadAgentIds, agent.id];
+                          onThreadAgentsChange(newIds);
+                        }}
+                      />
+                      <span>{agent.avatar_emoji} {agent.name}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+          <span
+            className={`connection-status ${
+              isConnected ? "connected" : "disconnected"
+            }`}
+          >
+            {isConnected ? "● Connected" : "● Disconnected"}
+          </span>
+        </div>
       </div>
 
       <div className="messages-container">
+        {hasMoreMessages && (
+          <button
+            className="outline load-earlier-btn"
+            onClick={onLoadEarlierMessages}
+          >
+            Load earlier messages
+          </button>
+        )}
         {messages.length === 0 ? (
           <div className="empty-state">
             <p>No messages yet. Start the conversation!</p>

@@ -171,6 +171,55 @@ describe("Messages API", () => {
       expect(body.error).toBe("Thread not found");
     });
 
+    test("should support limit query parameter", async () => {
+      const thread = createThread(db, "Test Thread");
+      for (let i = 0; i < 5; i++) {
+        await handleAddMessage(
+          db,
+          new Request(`http://localhost/api/threads/${thread.id}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: `Message ${i}` }),
+          }),
+          thread.id
+        );
+      }
+
+      const request = new Request(
+        `http://localhost/api/threads/${thread.id}/messages?limit=3`
+      );
+      const response = await handleGetMessages(db, request, thread.id);
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as Message[];
+      expect(body).toHaveLength(3);
+    });
+
+    test("should support offset query parameter", async () => {
+      const thread = createThread(db, "Test Thread");
+      for (let i = 0; i < 5; i++) {
+        await handleAddMessage(
+          db,
+          new Request(`http://localhost/api/threads/${thread.id}/messages`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: `Message ${i}` }),
+          }),
+          thread.id
+        );
+      }
+
+      const request = new Request(
+        `http://localhost/api/threads/${thread.id}/messages?limit=2&offset=2`
+      );
+      const response = await handleGetMessages(db, request, thread.id);
+
+      expect(response.status).toBe(200);
+      const body = await response.json() as Message[];
+      expect(body).toHaveLength(2);
+      expect(body[0].content).toBe("Message 2");
+    });
+
     test("should return empty array for thread with no messages", async () => {
       const thread = createThread(db, "Test Thread");
 

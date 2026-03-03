@@ -137,6 +137,39 @@ describe("Agents API", () => {
       const body = await response.json() as { error: string };
       expect(body.error).toBe("Invalid JSON");
     });
+
+    test("should return 409 when creating agent with duplicate active name", async () => {
+      // Create first agent
+      await handleCreateAgent(db, new Request("http://localhost/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validAgentInput),
+      }));
+
+      // Try to create second agent with same name
+      const response = await handleCreateAgent(db, new Request("http://localhost/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validAgentInput),
+      }));
+
+      expect(response.status).toBe(409);
+      const body = await response.json() as { error: string };
+      expect(body.error).toContain("already exists");
+    });
+
+    test("should allow creating agent with name of soft-deleted agent", async () => {
+      const agent = createAgent(db, validAgentInput);
+      await handleDeleteAgent(db, new Request(`http://localhost/api/agents/${agent.id}`, { method: "DELETE" }), agent.id);
+
+      const response = await handleCreateAgent(db, new Request("http://localhost/api/agents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(validAgentInput),
+      }));
+
+      expect(response.status).toBe(201);
+    });
   });
 
   describe("GET /api/agents/:id", () => {
@@ -209,6 +242,23 @@ describe("Agents API", () => {
       expect(response.status).toBe(400);
       const body = await response.json() as { error: string };
       expect(body.error).toContain("provider");
+    });
+
+    test("should return 409 when renaming to an existing active agent name", async () => {
+      createAgent(db, validAgentInput);
+      const agent2 = createAgent(db, { ...validAgentInput, name: "Agent 2" });
+
+      const request = new Request(`http://localhost/api/agents/${agent2.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Test Agent" }),
+      });
+
+      const response = await handleUpdateAgent(db, request, agent2.id);
+
+      expect(response.status).toBe(409);
+      const body = await response.json() as { error: string };
+      expect(body.error).toContain("already exists");
     });
   });
 
