@@ -34,6 +34,16 @@ type WS = ServerWebSocket<WSData>;
 
 const server = Bun.serve({
   port: 3000,
+  fetch(req, server) {
+    const url = new URL(req.url);
+    if (url.pathname === "/ws") {
+      if (server.upgrade(req, { data: {} as WSData })) {
+        return undefined;
+      }
+      return new Response("WebSocket upgrade failed", { status: 500 });
+    }
+    return new Response("Not found", { status: 404 });
+  },
   routes: {
     // Serve frontend
     "/": index,
