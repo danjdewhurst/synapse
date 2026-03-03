@@ -1,7 +1,8 @@
 import { Database } from "bun:sqlite";
-import { getAgentsForThread, createMessage, getMessages, type Agent, type Message } from "./db";
+import { getAgentsForThread, createMessage, getMessages, type Agent, type Message, type ResponseMode } from "./db";
 
 export type OnMessageCallback = (message: Message) => void;
+export type OnBeforeAgentCallback = (agent: Agent) => void;
 
 export const MAX_CONTEXT_MESSAGES = 50;
 
@@ -210,11 +211,22 @@ function buildConversationHistory(
   return messages;
 }
 
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
+  return shuffled;
+}
+
 export async function triggerAgentResponses(
   db: Database,
   threadId: number,
   userMessage: string,
-  onMessage?: OnMessageCallback
+  onMessage?: OnMessageCallback,
+  responseMode: ResponseMode = "concurrent",
+  onBeforeAgent?: OnBeforeAgentCallback
 ): Promise<void> {
   const agents = getAgentsForThread(db, threadId);
 
@@ -222,14 +234,22 @@ export async function triggerAgentResponses(
     return;
   }
 
-  // Trigger all agents concurrently
-  const promises = agents.map(async (agent) => {
-    const messages = buildConversationHistory(db, threadId, agent, userMessage);
-    const result = await callAgentWithRetry(agent, messages);
-
-    const message = createMessage(db, threadId, "agent", agent.id, result.content, result.status);
-    onMessage?.(message);
-  });
-
-  await Promise.all(promises);
+  if (responseMode === "concurrent") {
+    const promises = agents.map(async (agent) => {
+      const messages = buildConversationHistory(db, threadId, agent, userMessage);
+      const result = await callAgentWithRetry(agent, messages);
+      const message = createMessage(db, threadId, "agent", agent.id, result.content, result.status);
+      onMessage?.(message);
+    });
+    await Promise.all(promises);
+  } else {
+    const orderedAgents = responseMode === "random" ? shuffleArray(agents) : agents;
+    for (const agent of orderedAgents) {
+      onBeforeAgent?.(agent);
+      const messages = buildConversationHistory(db, threadId, agent, userMessage);
+      const result = await callAgentWithRetry(agent, messages);
+      const message = createMessage(db, threadId, "agent", agent.id, result.content, result.status);
+      onMessage?.(message);
+    }
+  }
 }

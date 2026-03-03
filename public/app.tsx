@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { Theme, Button } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
-import type { Thread, Message, Agent } from "./types";
+import type { Thread, Message, Agent, ResponseMode } from "./types";
 import { ThreadList } from "./components/ThreadList";
 import { ThreadView } from "./components/ThreadView";
 import { AgentManager } from "./components/AgentManager";
@@ -25,6 +25,13 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const activeThread = threads.find((t) => t.id === activeThreadId) || null;
+
+  // Load agents on startup
+  useEffect(() => {
+    api.listAgents()
+      .then(setAgents)
+      .catch(err => console.error("Failed to load agents:", err));
+  }, []);
 
   // Load messages and thread agents when active thread changes
   useEffect(() => {
@@ -109,6 +116,16 @@ function App() {
     }
   };
 
+  const handleResponseModeChange = async (mode: ResponseMode) => {
+    if (!activeThreadId) return;
+    try {
+      const updated = await api.updateThread(activeThreadId, { response_mode: mode });
+      setThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
+    } catch (error) {
+      console.error("Failed to update response mode:", error);
+    }
+  };
+
   return (
     <div className="app">
       <button
@@ -162,6 +179,7 @@ function App() {
             hasMoreMessages={hasMoreMessages}
             onSendMessage={handleSendMessage}
             onThreadAgentsChange={handleThreadAgentsChange}
+            onResponseModeChange={handleResponseModeChange}
             onLoadEarlierMessages={handleLoadEarlierMessages}
           />
         ) : (

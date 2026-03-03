@@ -109,25 +109,38 @@ export class WebSocketManager {
 
   private async triggerAgents(threadId: number, userMessage: string): Promise<void> {
     // Check if there are any agents assigned before broadcasting typing
+    const thread = getThread(this.db, threadId);
+    if (!thread) return;
+
     const agents = getAgentsForThread(this.db, threadId);
     if (agents.length === 0) return;
 
-    const typingAgentIds = new Set<number>(agents.map(a => a.id));
+    const responseMode = thread.response_mode ?? "concurrent";
+    const isSequential = responseMode !== "concurrent";
 
     try {
-      // Broadcast initial typing indicator with all agent IDs
-      this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
-
-      // Trigger responses — broadcast each message as it arrives
-      await triggerAgentResponses(this.db, threadId, userMessage, (message) => {
-        this.broadcastToThread(threadId, { type: "message", message });
-
-        // Remove agent from typing set and broadcast updated list
-        if (message.agent_id) {
-          typingAgentIds.delete(message.agent_id);
-        }
+      if (!isSequential) {
+        // Concurrent: show all agents typing at once
+        const typingAgentIds = new Set<number>(agents.map(a => a.id));
         this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
-      });
+
+        await triggerAgentResponses(this.db, threadId, userMessage, (message) => {
+          this.broadcastToThread(threadId, { type: "message", message });
+          if (message.agent_id) {
+            typingAgentIds.delete(message.agent_id);
+          }
+          this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
+        }, responseMode);
+      } else {
+        // Sequential: typing indicator shows only the current agent (handled naturally
+        // because onMessage fires after each agent completes, and the next agent starts)
+        await triggerAgentResponses(this.db, threadId, userMessage, (message) => {
+          this.broadcastToThread(threadId, { type: "message", message });
+        }, responseMode, (agent) => {
+          // Called before each agent starts — show only this agent as typing
+          this.broadcastToThread(threadId, { type: "typing", agentIds: [agent.id] });
+        });
+      }
 
       // Ensure typing is cleared when all agents finish
       this.broadcastToThread(threadId, { type: "typing", agentIds: [] });

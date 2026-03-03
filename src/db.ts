@@ -1,9 +1,12 @@
 import { Database, type SQLQueryBindings } from "bun:sqlite";
 
 // Types
+export type ResponseMode = "concurrent" | "random" | "ordered";
+
 export interface Thread {
   id: number;
   title: string;
+  response_mode: ResponseMode;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +56,7 @@ export function initDb(db: Database): void {
     CREATE TABLE IF NOT EXISTS threads (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
+      response_mode TEXT NOT NULL DEFAULT 'concurrent' CHECK (response_mode IN ('concurrent', 'random', 'ordered')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
@@ -94,6 +98,7 @@ export function initDb(db: Database): void {
     CREATE TABLE IF NOT EXISTS thread_agents (
       thread_id INTEGER NOT NULL,
       agent_id INTEGER NOT NULL,
+      position INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (thread_id, agent_id),
       FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
       FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
@@ -133,6 +138,18 @@ export function initDb(db: Database): void {
     db.exec("PRAGMA foreign_keys = ON");
   }
 
+  // Migration: add response_mode to threads
+  const threadInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='threads'").get() as { sql: string } | undefined;
+  if (threadInfo && !threadInfo.sql.includes("response_mode")) {
+    db.exec("ALTER TABLE threads ADD COLUMN response_mode TEXT NOT NULL DEFAULT 'concurrent' CHECK (response_mode IN ('concurrent', 'random', 'ordered'))");
+  }
+
+  // Migration: add position to thread_agents
+  const taInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='thread_agents'").get() as { sql: string } | undefined;
+  if (taInfo && !taInfo.sql.includes("position")) {
+    db.exec("ALTER TABLE thread_agents ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
+  }
+
   // Indexes for common queries
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)");
@@ -149,11 +166,36 @@ function normaliseAgent(agent: Agent): Agent {
 }
 
 // Thread operations
-export function createThread(db: Database, title: string): Thread {
+export function createThread(db: Database, title: string, responseMode: ResponseMode = "concurrent"): Thread {
   const stmt = db.prepare(
-    "INSERT INTO threads (title) VALUES (?) RETURNING *"
+    "INSERT INTO threads (title, response_mode) VALUES (?, ?) RETURNING *"
   );
-  return stmt.get(title) as Thread;
+  return stmt.get(title, responseMode) as Thread;
+}
+
+export function updateThread(
+  db: Database,
+  id: number,
+  updates: { response_mode?: ResponseMode }
+): Thread | null {
+  const existing = getThread(db, id);
+  if (!existing) return null;
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.response_mode !== undefined) {
+    fields.push("response_mode = ?");
+    values.push(updates.response_mode);
+  }
+
+  if (fields.length === 0) return existing;
+
+  const stmt = db.prepare(
+    `UPDATE threads SET ${fields.join(", ")} WHERE id = ? RETURNING *`
+  );
+  values.push(id);
+  return stmt.get(...values as SQLQueryBindings[]) as Thread | null;
 }
 
 export function getThread(db: Database, id: number): Thread | null {
@@ -331,9 +373,9 @@ export function removeAllAgentsFromThread(db: Database, threadId: number): void 
 
 export function setAgentsForThread(db: Database, threadId: number, agentIds: number[]): void {
   removeAllAgentsFromThread(db, threadId);
-  const stmt = db.prepare("INSERT INTO thread_agents (thread_id, agent_id) VALUES (?, ?)");
-  for (const agentId of agentIds) {
-    stmt.run(threadId, agentId);
+  const stmt = db.prepare("INSERT INTO thread_agents (thread_id, agent_id, position) VALUES (?, ?, ?)");
+  for (let i = 0; i < agentIds.length; i++) {
+    stmt.run(threadId, agentIds[i]!, i);
   }
 }
 
@@ -342,7 +384,7 @@ export function getAgentsForThread(db: Database, threadId: number): Agent[] {
     SELECT a.* FROM agents a
     JOIN thread_agents ta ON a.id = ta.agent_id
     WHERE ta.thread_id = ? AND a.is_active = TRUE
-    ORDER BY a.created_at DESC
+    ORDER BY ta.position ASC
   `);
   return stmt.all(threadId) as Agent[];
 }

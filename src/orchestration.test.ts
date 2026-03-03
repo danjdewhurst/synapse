@@ -1,6 +1,6 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, createAgent, createMessage, addAgentToThread, getMessages } from "./db";
+import { initDb, createThread, createAgent, createMessage, addAgentToThread, setAgentsForThread, getMessages } from "./db";
 import { triggerAgentResponses, MAX_CONTEXT_MESSAGES } from "./orchestration";
 
 const TEST_DB_PATH = ":memory:";
@@ -320,6 +320,120 @@ describe("Agent Orchestration", () => {
       expect(requestBody.messages[0].content).toBe("You are a test agent");
       expect(requestBody.messages[1].role).toBe("user");
       expect(requestBody.messages[1].content).toBe("Hello agent");
+    });
+
+    test("should execute agents sequentially in ordered mode", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "Agent A",
+        avatar_emoji: "🅰️",
+        system_prompt: "You are agent A",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Agent B",
+        avatar_emoji: "🅱️",
+        system_prompt: "You are agent B",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent3 = createAgent(db, {
+        name: "Agent C",
+        avatar_emoji: "©️",
+        system_prompt: "You are agent C",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      // Set agents in specific order: agent3, agent1, agent2
+      setAgentsForThread(db, thread.id, [agent3.id, agent1.id, agent2.id]);
+
+      const callOrder: number[] = [];
+      let resolveCount = 0;
+
+      globalThis.fetch = Object.assign(
+        async (input: string | URL | Request, init?: RequestInit) => {
+          const body = init?.body ? JSON.parse(init.body as string) : undefined;
+          // Track which agent's system prompt was used to determine call order
+          const systemPrompt = body?.messages?.[0]?.content as string;
+          if (systemPrompt.includes("agent A")) callOrder.push(agent1.id);
+          else if (systemPrompt.includes("agent B")) callOrder.push(agent2.id);
+          else if (systemPrompt.includes("agent C")) callOrder.push(agent3.id);
+
+          resolveCount++;
+          return new Response(
+            JSON.stringify({ choices: [{ message: { content: `Response ${resolveCount}` } }] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        },
+        { preconnect: undefined, writable: true }
+      ) as typeof globalThis.fetch;
+
+      await triggerAgentResponses(db, thread.id, "Hello", undefined, "ordered");
+
+      // Should follow position order: agent3, agent1, agent2
+      expect(callOrder).toEqual([agent3.id, agent1.id, agent2.id]);
+    });
+
+    test("should execute agents sequentially in random mode", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agents = [];
+      for (let i = 0; i < 5; i++) {
+        agents.push(createAgent(db, {
+          name: `Agent ${i}`,
+          avatar_emoji: "🤖",
+          system_prompt: `You are agent ${i}`,
+          provider: "openai",
+          model: "gpt-4o",
+          api_key_ref: "OPENAI_API_KEY",
+        }));
+      }
+
+      setAgentsForThread(db, thread.id, agents.map(a => a.id));
+
+      const receivedMessages: Array<{ agent_id: number | null }> = [];
+      await triggerAgentResponses(db, thread.id, "Hello", (message) => {
+        receivedMessages.push({ agent_id: message.agent_id });
+      }, "random");
+
+      // All agents should respond exactly once
+      expect(receivedMessages.length).toBe(5);
+      const respondedIds = receivedMessages.map(m => m.agent_id).sort();
+      expect(respondedIds).toEqual(agents.map(a => a.id).sort());
+    });
+
+    test("should execute agents concurrently in concurrent mode (default)", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "Concurrent A",
+        avatar_emoji: "🤖",
+        system_prompt: "You are agent A",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Concurrent B",
+        avatar_emoji: "🤖",
+        system_prompt: "You are agent B",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent1.id);
+      addAgentToThread(db, thread.id, agent2.id);
+
+      const receivedMessages: Array<{ agent_id: number | null }> = [];
+      await triggerAgentResponses(db, thread.id, "Hello", (message) => {
+        receivedMessages.push({ agent_id: message.agent_id });
+      }, "concurrent");
+
+      expect(receivedMessages.length).toBe(2);
     });
   });
 });

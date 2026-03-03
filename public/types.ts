@@ -1,8 +1,11 @@
 // Shared types for frontend and backend
 
+export type ResponseMode = "concurrent" | "random" | "ordered";
+
 export interface Thread {
   id: number;
   title: string;
+  response_mode: ResponseMode;
   created_at: string;
   updated_at: string;
 }

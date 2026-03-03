@@ -1,6 +1,6 @@
 import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, getThread, listThreads, createMessage, getMessages, createAgent, getAgent, listAgents, updateAgent, deleteAgent, addAgentToThread, getAgentsForThread, setAgentsForThread, removeAllAgentsFromThread } from "./db";
+import { initDb, createThread, getThread, listThreads, updateThread, createMessage, getMessages, createAgent, getAgent, listAgents, updateAgent, deleteAgent, addAgentToThread, getAgentsForThread, setAgentsForThread, removeAllAgentsFromThread } from "./db";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -474,6 +474,88 @@ describe("Database Schema", () => {
       const thread = createThread(db, "Test Thread");
       const agents = getAgentsForThread(db, thread.id);
       expect(agents).toEqual([]);
+    });
+  });
+
+  describe("response_mode", () => {
+    test("should default response_mode to concurrent", () => {
+      const thread = createThread(db, "Test Thread");
+      expect(thread.response_mode).toBe("concurrent");
+    });
+
+    test("should create thread with custom response_mode", () => {
+      const thread = createThread(db, "Test Thread", "random");
+      expect(thread.response_mode).toBe("random");
+    });
+
+    test("should update response_mode via updateThread", () => {
+      const thread = createThread(db, "Test Thread");
+      const updated = updateThread(db, thread.id, { response_mode: "ordered" });
+      expect(updated).not.toBeNull();
+      expect(updated!.response_mode).toBe("ordered");
+    });
+
+    test("should return null when updating non-existent thread", () => {
+      const result = updateThread(db, 999, { response_mode: "random" });
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("thread_agents positions", () => {
+    test("should store and respect agent positions", () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "First",
+        avatar_emoji: "1️⃣",
+        system_prompt: "Prompt",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Second",
+        avatar_emoji: "2️⃣",
+        system_prompt: "Prompt",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent3 = createAgent(db, {
+        name: "Third",
+        avatar_emoji: "3️⃣",
+        system_prompt: "Prompt",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      // Set agents with agent3 first, then agent1, then agent2
+      setAgentsForThread(db, thread.id, [agent3.id, agent1.id, agent2.id]);
+
+      const agents = getAgentsForThread(db, thread.id);
+      expect(agents).toHaveLength(3);
+      expect(agents[0]!.id).toBe(agent3.id);
+      expect(agents[1]!.id).toBe(agent1.id);
+      expect(agents[2]!.id).toBe(agent2.id);
+    });
+
+    test("should default position to 0 for addAgentToThread", () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "Prompt",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      addAgentToThread(db, thread.id, agent.id);
+
+      const row = db.prepare(
+        "SELECT position FROM thread_agents WHERE thread_id = ? AND agent_id = ?"
+      ).get(thread.id, agent.id) as { position: number };
+      expect(row.position).toBe(0);
     });
   });
 });

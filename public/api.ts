@@ -1,4 +1,4 @@
-import type { Thread, Message, Agent, CreateAgentInput } from "./types";
+import type { Thread, Message, Agent, CreateAgentInput, ResponseMode } from "./types";
 
 const API_BASE = "/api";
 
@@ -33,6 +33,13 @@ export async function createThread(title: string): Promise<Thread> {
 
 export async function getThread(id: number): Promise<Thread> {
   return fetchJson<Thread>(`${API_BASE}/threads/${id}`);
+}
+
+export async function updateThread(id: number, updates: { response_mode?: ResponseMode }): Promise<Thread> {
+  return fetchJson<Thread>(`${API_BASE}/threads/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(updates),
+  });
 }
 
 // Thread Agents

@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { createThread, getThread, listThreads, getAgent, getAgentsForThread, setAgentsForThread } from "./db";
+import { createThread, getThread, listThreads, updateThread, getAgent, getAgentsForThread, setAgentsForThread, type ResponseMode } from "./db";
 
 export async function handleListThreads(
   db: Database,
@@ -23,6 +23,38 @@ export async function handleCreateThread(
 
     const thread = createThread(db, title);
     return Response.json(thread, { status: 201 });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return Response.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    throw error;
+  }
+}
+
+const VALID_RESPONSE_MODES: ResponseMode[] = ["concurrent", "random", "ordered"];
+
+export async function handleUpdateThread(
+  db: Database,
+  request: Request,
+  id: number
+): Promise<Response> {
+  const existing = getThread(db, id);
+  if (!existing) {
+    return Response.json({ error: "Thread not found" }, { status: 404 });
+  }
+
+  try {
+    const body = await request.json() as { response_mode?: string };
+
+    if (body.response_mode !== undefined && !VALID_RESPONSE_MODES.includes(body.response_mode as ResponseMode)) {
+      return Response.json({ error: "Invalid response_mode. Must be concurrent, random, or ordered" }, { status: 400 });
+    }
+
+    const updated = updateThread(db, id, {
+      response_mode: body.response_mode as ResponseMode | undefined,
+    });
+
+    return Response.json(updated);
   } catch (error) {
     if (error instanceof SyntaxError) {
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
