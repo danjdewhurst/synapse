@@ -12,7 +12,8 @@ async function callOpenAI(agent: Agent, messages: ChatCompletionMessage[]): Prom
     throw new Error(`API key not found: ${agent.api_key_ref}`);
   }
 
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  const baseUrl = process.env.OPENAI_BASE_URL ?? "https://api.openai.com";
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -45,7 +46,8 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
   const systemMessage = messages.find(m => m.role === "system")?.content;
   const conversationMessages = messages.filter(m => m.role !== "system");
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
+  const baseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
+  const response = await fetch(`${baseUrl}/v1/messages`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
