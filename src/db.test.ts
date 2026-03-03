@@ -95,6 +95,34 @@ describe("Database Schema", () => {
       expect(message.content).toBe("Agent response");
     });
 
+    test("should include agent name and avatar in messages", () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Dave",
+        avatar_emoji: "😎",
+        system_prompt: "You are Dave",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+        temperature: 0.7,
+      });
+
+      const message = createMessage(db, thread.id, "agent", agent.id, "Hey there!");
+      expect(message.agent_name).toBe("Dave");
+      expect(message.agent_avatar_emoji).toBe("😎");
+
+      const messages = getMessages(db, thread.id);
+      expect(messages[0].agent_name).toBe("Dave");
+      expect(messages[0].agent_avatar_emoji).toBe("😎");
+    });
+
+    test("should have null agent name for user messages", () => {
+      const thread = createThread(db, "Test Thread");
+      const message = createMessage(db, thread.id, "user", null, "Hello");
+      expect(message.agent_name).toBeNull();
+      expect(message.agent_avatar_emoji).toBeNull();
+    });
+
     test("should get messages for a thread ordered by created_at asc", () => {
       const thread = createThread(db, "Test Thread");
       const msg1 = createMessage(db, thread.id, "user", null, "Message 1");

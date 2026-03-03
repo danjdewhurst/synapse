@@ -12,6 +12,8 @@ export interface Message {
   thread_id: number;
   role: "user" | "agent";
   agent_id: number | null;
+  agent_name: string | null;
+  agent_avatar_emoji: string | null;
   content: string;
   status: "complete" | "error";
   created_at: string;

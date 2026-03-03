@@ -13,6 +13,8 @@ export interface Message {
   thread_id: number;
   role: "user" | "agent";
   agent_id: number | null;
+  agent_name: string | null;
+  agent_avatar_emoji: string | null;
   content: string;
   status: "complete" | "error";
   created_at: string;
@@ -174,10 +176,18 @@ export function createMessage(
   content: string,
   status: "complete" | "error" = "complete"
 ): Message {
-  const stmt = db.prepare(
-    "INSERT INTO messages (thread_id, role, agent_id, content, status) VALUES (?, ?, ?, ?, ?) RETURNING *"
+  const insertStmt = db.prepare(
+    "INSERT INTO messages (thread_id, role, agent_id, content, status) VALUES (?, ?, ?, ?, ?) RETURNING id"
   );
-  return stmt.get(threadId, role, agentId, content, status) as Message;
+  const { id } = insertStmt.get(threadId, role, agentId, content, status) as { id: number };
+
+  const selectStmt = db.prepare(
+    `SELECT m.*, a.name AS agent_name, a.avatar_emoji AS agent_avatar_emoji
+     FROM messages m
+     LEFT JOIN agents a ON m.agent_id = a.id
+     WHERE m.id = ?`
+  );
+  return selectStmt.get(id) as Message;
 }
 
 export function getMessages(
@@ -185,7 +195,11 @@ export function getMessages(
   threadId: number,
   options?: { limit?: number; offset?: number }
 ): Message[] {
-  let sql = "SELECT * FROM messages WHERE thread_id = ? ORDER BY created_at ASC";
+  let sql = `SELECT m.*, a.name AS agent_name, a.avatar_emoji AS agent_avatar_emoji
+    FROM messages m
+    LEFT JOIN agents a ON m.agent_id = a.id
+    WHERE m.thread_id = ?
+    ORDER BY m.created_at ASC`;
   const params: unknown[] = [threadId];
 
   if (options?.limit !== undefined) {

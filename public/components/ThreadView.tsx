@@ -65,9 +65,11 @@ export function ThreadView({
     }
   };
 
-  const getAgentName = (agentId: number | null) => {
-    if (!agentId) return "You";
-    const agent = agents.find((a) => a.id === agentId);
+  const getAgentLabel = (message: Message) => {
+    if (message.role === "user") return "You";
+    if (message.agent_name) return `${message.agent_avatar_emoji ?? "🤖"} ${message.agent_name}`;
+    // Fallback to client-side lookup for legacy messages
+    const agent = agents.find((a) => a.id === message.agent_id);
     return agent ? `${agent.avatar_emoji} ${agent.name}` : "Unknown";
   };
 
@@ -147,7 +149,7 @@ export function ThreadView({
             >
               <div className="message-header">
                 <span className={message.agent_id ? "agent-label" : ""}>
-                  {getAgentName(message.agent_id)}
+                  {getAgentLabel(message)}
                 </span>
               </div>
               <div className="message-content">
