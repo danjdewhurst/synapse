@@ -1,5 +1,12 @@
-import { Database } from "bun:sqlite";
-import { getAgentsForThread, createMessage, getMessages, type Agent, type Message, type ResponseMode } from "./db";
+import type { Database } from "bun:sqlite";
+import {
+  type Agent,
+  createMessage,
+  getAgentsForThread,
+  getMessages,
+  type Message,
+  type ResponseMode,
+} from "./db";
 
 export type OnMessageCallback = (message: Message) => void;
 export type OnBeforeAgentCallback = (agent: Agent) => void;
@@ -13,7 +20,7 @@ interface ChatCompletionMessage {
 }
 
 export function sanitiseName(name: string): string {
-  let sanitised = name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
+  const sanitised = name.replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_-]/g, "");
   if (sanitised.length === 0) return "agent";
   return sanitised.slice(0, 64);
 }
@@ -22,7 +29,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly retryAfter?: number
+    public readonly retryAfter?: number,
   ) {
     super(message);
     this.name = "ApiError";
@@ -47,7 +54,7 @@ async function callOpenAI(agent: Agent, messages: ChatCompletionMessage[]): Prom
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: agent.model,
@@ -60,11 +67,11 @@ async function callOpenAI(agent: Agent, messages: ChatCompletionMessage[]): Prom
     throw new ApiError(
       `OpenAI API error: ${response.status}`,
       response.status,
-      parseRetryAfter(response)
+      parseRetryAfter(response),
     );
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     choices: [{ message: { content: string } }];
   };
   return data.choices[0].message.content;
@@ -77,9 +84,9 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
   }
 
   // Separate system message from conversation, strip name field
-  const systemMessage = messages.find(m => m.role === "system")?.content;
+  const systemMessage = messages.find((m) => m.role === "system")?.content;
   const conversationMessages = messages
-    .filter(m => m.role !== "system")
+    .filter((m) => m.role !== "system")
     .map(({ name, ...rest }) => rest);
 
   const baseUrl = process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
@@ -103,11 +110,11 @@ async function callAnthropic(agent: Agent, messages: ChatCompletionMessage[]): P
     throw new ApiError(
       `Anthropic API error: ${response.status}`,
       response.status,
-      parseRetryAfter(response)
+      parseRetryAfter(response),
     );
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     content: [{ text: string }];
   };
   return data.content[0].text;
@@ -124,7 +131,7 @@ async function callOpenRouter(agent: Agent, messages: ChatCompletionMessage[]): 
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
       model: agent.model,
@@ -137,11 +144,11 @@ async function callOpenRouter(agent: Agent, messages: ChatCompletionMessage[]): 
     throw new ApiError(
       `OpenRouter API error: ${response.status}`,
       response.status,
-      parseRetryAfter(response)
+      parseRetryAfter(response),
     );
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     choices: [{ message: { content: string } }];
   };
   return data.choices[0].message.content;
@@ -150,7 +157,7 @@ async function callOpenRouter(agent: Agent, messages: ChatCompletionMessage[]): 
 async function callAgentWithRetry(
   agent: Agent,
   messages: ChatCompletionMessage[],
-  maxRetries = 3
+  maxRetries = 3,
 ): Promise<{ content: string; status: "complete" | "error" }> {
   let lastError: Error | undefined;
 
@@ -178,10 +185,8 @@ async function callAgentWithRetry(
       // Use Retry-After header if available, otherwise exponential backoff
       if (attempt < maxRetries - 1) {
         const retryAfter = error instanceof ApiError ? error.retryAfter : undefined;
-        const delayMs = retryAfter !== undefined
-          ? retryAfter * 1000
-          : 1000 * Math.pow(2, attempt);
-        await new Promise(resolve => setTimeout(resolve, delayMs));
+        const delayMs = retryAfter !== undefined ? retryAfter * 1000 : 1000 * 2 ** attempt;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
@@ -196,11 +201,9 @@ function buildConversationHistory(
   db: Database,
   threadId: number,
   agent: Agent,
-  newUserMessage: string
+  newUserMessage: string,
 ): ChatCompletionMessage[] {
-  const messages: ChatCompletionMessage[] = [
-    { role: "system", content: agent.system_prompt },
-  ];
+  const messages: ChatCompletionMessage[] = [{ role: "system", content: agent.system_prompt }];
 
   // Get existing messages from thread, limited to recent context
   const allMessages = getMessages(db, threadId);
@@ -215,7 +218,11 @@ function buildConversationHistory(
         if (agent.provider === "anthropic") {
           messages.push({ role: "assistant", content: `[${msg.agent_name}]: ${msg.content}` });
         } else {
-          messages.push({ role: "assistant", name: sanitiseName(msg.agent_name), content: msg.content });
+          messages.push({
+            role: "assistant",
+            name: sanitiseName(msg.agent_name),
+            content: msg.content,
+          });
         }
       } else {
         messages.push({ role: "assistant", content: msg.content });
@@ -244,7 +251,7 @@ export async function triggerAgentResponses(
   userMessage: string,
   onMessage?: OnMessageCallback,
   responseMode: ResponseMode = "concurrent",
-  onBeforeAgent?: OnBeforeAgentCallback
+  onBeforeAgent?: OnBeforeAgentCallback,
 ): Promise<void> {
   const agents = getAgentsForThread(db, threadId);
 

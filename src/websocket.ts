@@ -1,6 +1,6 @@
-import type { ServerWebSocket } from "bun";
 import type { Database } from "bun:sqlite";
-import { createMessage, getThread, getAgentsForThread } from "./db";
+import type { ServerWebSocket } from "bun";
+import { createMessage, getAgentsForThread, getThread } from "./db";
 import { triggerAgentResponses } from "./orchestration";
 
 interface WebSocketData {
@@ -121,25 +121,38 @@ export class WebSocketManager {
     try {
       if (!isSequential) {
         // Concurrent: show all agents typing at once
-        const typingAgentIds = new Set<number>(agents.map(a => a.id));
+        const typingAgentIds = new Set<number>(agents.map((a) => a.id));
         this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
 
-        await triggerAgentResponses(this.db, threadId, userMessage, (message) => {
-          this.broadcastToThread(threadId, { type: "message", message });
-          if (message.agent_id) {
-            typingAgentIds.delete(message.agent_id);
-          }
-          this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
-        }, responseMode);
+        await triggerAgentResponses(
+          this.db,
+          threadId,
+          userMessage,
+          (message) => {
+            this.broadcastToThread(threadId, { type: "message", message });
+            if (message.agent_id) {
+              typingAgentIds.delete(message.agent_id);
+            }
+            this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
+          },
+          responseMode,
+        );
       } else {
         // Sequential: typing indicator shows only the current agent (handled naturally
         // because onMessage fires after each agent completes, and the next agent starts)
-        await triggerAgentResponses(this.db, threadId, userMessage, (message) => {
-          this.broadcastToThread(threadId, { type: "message", message });
-        }, responseMode, (agent) => {
-          // Called before each agent starts — show only this agent as typing
-          this.broadcastToThread(threadId, { type: "typing", agentIds: [agent.id] });
-        });
+        await triggerAgentResponses(
+          this.db,
+          threadId,
+          userMessage,
+          (message) => {
+            this.broadcastToThread(threadId, { type: "message", message });
+          },
+          responseMode,
+          (agent) => {
+            // Called before each agent starts — show only this agent as typing
+            this.broadcastToThread(threadId, { type: "typing", agentIds: [agent.id] });
+          },
+        );
       }
 
       // Ensure typing is cleared when all agents finish

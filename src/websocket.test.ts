@@ -1,7 +1,7 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
-import type { ServerWebSocket } from "bun";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, createAgent, addAgentToThread } from "./db";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { ServerWebSocket } from "bun";
+import { addAgentToThread, createAgent, createThread, initDb } from "./db";
 import { WebSocketManager } from "./websocket";
 
 const TEST_DB_PATH = ":memory:";
@@ -32,7 +32,9 @@ describe("WebSocket Manager", () => {
 
     test("should store threadId on websocket data", () => {
       const thread = createThread(db, "Test Thread");
-      const mockWs = { send: () => {}, data: {} } as unknown as ServerWebSocket<{ threadId?: number }>;
+      const mockWs = { send: () => {}, data: {} } as unknown as ServerWebSocket<{
+        threadId?: number;
+      }>;
 
       wsManager.joinThread(mockWs, thread.id);
 
@@ -56,8 +58,14 @@ describe("WebSocket Manager", () => {
     test("should send message to all clients in thread", () => {
       const thread = createThread(db, "Test Thread");
       const messages: string[] = [];
-      const mockWs1 = { send: (msg: string) => messages.push(msg), data: {} } as unknown as ServerWebSocket<unknown>;
-      const mockWs2 = { send: (msg: string) => messages.push(msg), data: {} } as unknown as ServerWebSocket<unknown>;
+      const mockWs1 = {
+        send: (msg: string) => messages.push(msg),
+        data: {},
+      } as unknown as ServerWebSocket<unknown>;
+      const mockWs2 = {
+        send: (msg: string) => messages.push(msg),
+        data: {},
+      } as unknown as ServerWebSocket<unknown>;
 
       wsManager.joinThread(mockWs1, thread.id);
       wsManager.joinThread(mockWs2, thread.id);
@@ -72,8 +80,14 @@ describe("WebSocket Manager", () => {
       const thread1 = createThread(db, "Thread 1");
       const thread2 = createThread(db, "Thread 2");
       const messages: string[] = [];
-      const mockWs1 = { send: (msg: string) => messages.push(msg), data: {} } as unknown as ServerWebSocket<unknown>;
-      const mockWs2 = { send: (msg: string) => {}, data: {} } as unknown as ServerWebSocket<unknown>;
+      const mockWs1 = {
+        send: (msg: string) => messages.push(msg),
+        data: {},
+      } as unknown as ServerWebSocket<unknown>;
+      const mockWs2 = {
+        send: (_msg: string) => {},
+        data: {},
+      } as unknown as ServerWebSocket<unknown>;
 
       wsManager.joinThread(mockWs1, thread1.id);
       wsManager.joinThread(mockWs2, thread2.id);
@@ -90,18 +104,19 @@ describe("WebSocket Manager", () => {
       const messages: string[] = [];
       const mockWs = {
         send: (msg: string) => messages.push(msg),
-        data: { threadId: thread.id }
+        data: { threadId: thread.id },
       } as unknown as ServerWebSocket<{ threadId: number }>;
 
       wsManager.joinThread(mockWs, thread.id);
 
       // Mock fetch for agent responses
       globalThis.fetch = Object.assign(
-        async () => new Response(
-          JSON.stringify({ choices: [{ message: { content: "AI response" } }] }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        ),
-        { preconnect: undefined, writable: true }
+        async () =>
+          new Response(JSON.stringify({ choices: [{ message: { content: "AI response" } }] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        { preconnect: undefined, writable: true },
       ) as typeof globalThis.fetch;
 
       process.env.OPENAI_API_KEY = "test-key";
@@ -109,7 +124,7 @@ describe("WebSocket Manager", () => {
       await wsManager.handleClientMessage(mockWs, JSON.stringify({ content: "Hello" }));
 
       // Should broadcast user message
-      const userMessage = messages.find(m => m.includes("Hello"));
+      const userMessage = messages.find((m) => m.includes("Hello"));
       expect(userMessage).toBeDefined();
     });
 
@@ -118,14 +133,14 @@ describe("WebSocket Manager", () => {
       const sentMessages: string[] = [];
       const mockWs = {
         send: (msg: string) => sentMessages.push(msg),
-        data: { threadId: thread.id }
+        data: { threadId: thread.id },
       } as unknown as ServerWebSocket<{ threadId: number }>;
 
       wsManager.joinThread(mockWs, thread.id);
 
       await wsManager.handleClientMessage(mockWs, "invalid json");
 
-      expect(sentMessages.some(m => m.includes("error"))).toBe(true);
+      expect(sentMessages.some((m) => m.includes("error"))).toBe(true);
     });
 
     test("should not broadcast typing when thread has no agents", async () => {
@@ -133,7 +148,7 @@ describe("WebSocket Manager", () => {
       const messages: string[] = [];
       const mockWs = {
         send: (msg: string) => messages.push(msg),
-        data: { threadId: thread.id }
+        data: { threadId: thread.id },
       } as unknown as ServerWebSocket<{ threadId: number }>;
 
       wsManager.joinThread(mockWs, thread.id);
@@ -141,10 +156,10 @@ describe("WebSocket Manager", () => {
       await wsManager.handleClientMessage(mockWs, JSON.stringify({ content: "Hello" }));
 
       // Wait for async triggerAgents to complete
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       // Should have the user message broadcast but no typing indicator
-      const typingMessages = messages.filter(m => m.includes('"typing"'));
+      const typingMessages = messages.filter((m) => m.includes('"typing"'));
       expect(typingMessages).toHaveLength(0);
     });
 
@@ -162,49 +177,53 @@ describe("WebSocket Manager", () => {
 
       process.env.OPENAI_API_KEY = "test-key";
       globalThis.fetch = Object.assign(
-        async () => new Response(
-          JSON.stringify({ choices: [{ message: { content: "AI response" } }] }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        ),
-        { preconnect: undefined, writable: true }
+        async () =>
+          new Response(JSON.stringify({ choices: [{ message: { content: "AI response" } }] }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        { preconnect: undefined, writable: true },
       ) as typeof globalThis.fetch;
 
       const sentMessages: string[] = [];
       const mockWs = {
         send: (msg: string) => sentMessages.push(msg),
-        data: { threadId: thread.id }
+        data: { threadId: thread.id },
       } as unknown as ServerWebSocket<{ threadId: number }>;
 
       wsManager.joinThread(mockWs, thread.id);
       await wsManager.handleClientMessage(mockWs, JSON.stringify({ content: "Hello" }));
 
       // Wait for async triggerAgents to complete
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const parsed = sentMessages.map(m => JSON.parse(m));
+      const parsed = sentMessages.map((m) => JSON.parse(m));
 
       // Should have initial typing with agentIds
-      const typingStart = parsed.find(m => m.type === "typing" && m.agentIds?.length > 0);
+      const typingStart = parsed.find((m) => m.type === "typing" && m.agentIds?.length > 0);
       expect(typingStart).toBeDefined();
       expect(typingStart.agentIds).toContain(agent.id);
 
       // Should have agent message broadcast individually
-      const agentMessage = parsed.find(m => m.type === "message" && m.message?.role === "agent");
+      const agentMessage = parsed.find((m) => m.type === "message" && m.message?.role === "agent");
       expect(agentMessage).toBeDefined();
       expect(agentMessage.message.content).toBe("AI response");
 
       // Should end with empty typing
-      const lastTyping = parsed.filter(m => m.type === "typing").pop();
+      const lastTyping = parsed.filter((m) => m.type === "typing").pop();
       expect(lastTyping.agentIds).toEqual([]);
     });
 
     test("should return error when not in a thread", async () => {
       const mockWs = {
-        send: (msg: string) => {},
-        data: {}
+        send: (_msg: string) => {},
+        data: {},
       } as unknown as ServerWebSocket<{ threadId?: number }>;
 
-      const result = await wsManager.handleClientMessage(mockWs, JSON.stringify({ content: "Hello" }));
+      const result = await wsManager.handleClientMessage(
+        mockWs,
+        JSON.stringify({ content: "Hello" }),
+      );
 
       expect(result).toBe(false);
     });

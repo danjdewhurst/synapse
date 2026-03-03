@@ -1,14 +1,14 @@
-import React, { useState, useCallback, useEffect } from "react";
+import { Button, Theme } from "@radix-ui/themes";
+import { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { Theme, Button } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
-import type { Thread, Message, Agent, ResponseMode } from "./types";
-import { ThreadList } from "./components/ThreadList";
-import { ThreadView } from "./components/ThreadView";
+import * as api from "./api";
 import { AgentManager } from "./components/AgentManager";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ThreadList } from "./components/ThreadList";
+import { ThreadView } from "./components/ThreadView";
+import type { Agent, Message, ResponseMode, Thread } from "./types";
 import { useWebSocket } from "./useWebSocket";
-import * as api from "./api";
 import "./styles.css";
 
 const PAGE_SIZE = 100;
@@ -28,9 +28,10 @@ function App() {
 
   // Load agents on startup
   useEffect(() => {
-    api.listAgents()
+    api
+      .listAgents()
       .then(setAgents)
-      .catch(err => console.error("Failed to load agents:", err));
+      .catch((err) => console.error("Failed to load agents:", err));
   }, []);
 
   // Load messages and thread agents when active thread changes
@@ -41,18 +42,26 @@ function App() {
     }
     let cancelled = false;
 
-    api.getMessages(activeThreadId, { limit: PAGE_SIZE }).then(data => {
-      if (!cancelled) {
-        setMessages(data);
-        setHasMoreMessages(data.length === PAGE_SIZE);
-      }
-    }).catch(err => console.error("Failed to load messages:", err));
+    api
+      .getMessages(activeThreadId, { limit: PAGE_SIZE })
+      .then((data) => {
+        if (!cancelled) {
+          setMessages(data);
+          setHasMoreMessages(data.length === PAGE_SIZE);
+        }
+      })
+      .catch((err) => console.error("Failed to load messages:", err));
 
-    api.getThreadAgents(activeThreadId).then(agents => {
-      if (!cancelled) setThreadAgentIds(agents.map(a => a.id));
-    }).catch(err => console.error("Failed to load thread agents:", err));
+    api
+      .getThreadAgents(activeThreadId)
+      .then((agents) => {
+        if (!cancelled) setThreadAgentIds(agents.map((a) => a.id));
+      })
+      .catch((err) => console.error("Failed to load thread agents:", err));
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [activeThreadId]);
 
   const handleNewMessage = useCallback((message: Message) => {
@@ -110,7 +119,7 @@ function App() {
     if (!activeThreadId) return;
     try {
       const agents = await api.setThreadAgents(activeThreadId, agentIds);
-      setThreadAgentIds(agents.map(a => a.id));
+      setThreadAgentIds(agents.map((a) => a.id));
     } catch (error) {
       console.error("Failed to update thread agents:", error);
     }
@@ -120,7 +129,7 @@ function App() {
     if (!activeThreadId) return;
     try {
       const updated = await api.updateThread(activeThreadId, { response_mode: mode });
-      setThreads(prev => prev.map(t => t.id === updated.id ? updated : t));
+      setThreads((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
     } catch (error) {
       console.error("Failed to update response mode:", error);
     }
@@ -129,6 +138,7 @@ function App() {
   return (
     <div className="app">
       <button
+        type="button"
         className="sidebar-toggle"
         onClick={() => setSidebarOpen(!sidebarOpen)}
         aria-label="Toggle sidebar"
@@ -136,27 +146,23 @@ function App() {
         ☰
       </button>
 
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: overlay dismiss */}
       <div
         className={`sidebar-overlay ${sidebarOpen ? "visible" : ""}`}
         onClick={() => setSidebarOpen(false)}
+        role="presentation"
       />
 
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="sidebar-header">
           <h1>🧠 Synapse</h1>
-          <Button
-            variant="outline"
-            onClick={() => setShowAgentManager(!showAgentManager)}
-          >
+          <Button variant="outline" onClick={() => setShowAgentManager(!showAgentManager)}>
             {showAgentManager ? "← Back" : "🤖 Agents"}
           </Button>
         </div>
 
         {showAgentManager ? (
-          <AgentManager
-            agents={agents}
-            onAgentsUpdate={handleAgentsUpdate}
-          />
+          <AgentManager agents={agents} onAgentsUpdate={handleAgentsUpdate} />
         ) : (
           <ThreadList
             threads={threads}
@@ -204,5 +210,5 @@ root.render(
     <Theme appearance="dark" accentColor="indigo">
       <App />
     </Theme>
-  </ErrorBoundary>
+  </ErrorBoundary>,
 );

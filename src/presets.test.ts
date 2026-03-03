@@ -1,7 +1,7 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createAgent, listAgents, type Agent } from "./db";
-import { presets, seedPresets, handleListPresets, handleCreateFromPreset } from "./presets";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { type Agent, createAgent, initDb, listAgents } from "./db";
+import { handleCreateFromPreset, handleListPresets, presets, seedPresets } from "./presets";
 
 describe("Presets", () => {
   let db: Database;

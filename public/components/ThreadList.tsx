@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { TextField, Button, Flex } from "@radix-ui/themes";
-import type { Thread } from "../types";
+import { Button, Flex, TextField } from "@radix-ui/themes";
+import { useEffect, useState } from "react";
 import * as api from "../api";
+import type { Thread } from "../types";
 
 interface ThreadListProps {
   threads: Thread[];
@@ -19,6 +19,7 @@ export function ThreadList({
   const [newThreadTitle, setNewThreadTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load on mount
   useEffect(() => {
     loadThreads();
   }, []);
@@ -74,6 +75,7 @@ export function ThreadList({
         ) : (
           threads.map((thread) => (
             <button
+              type="button"
               key={thread.id}
               className={`thread-item ${thread.id === activeThreadId ? "active" : ""}`}
               onClick={() => onThreadSelect(thread.id)}

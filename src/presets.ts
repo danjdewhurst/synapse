@@ -1,5 +1,5 @@
-import { Database } from "bun:sqlite";
-import { createAgent, listAgents, type CreateAgentInput } from "./db";
+import type { Database } from "bun:sqlite";
+import { type CreateAgentInput, createAgent, listAgents } from "./db";
 
 export interface PresetAgent {
   name: string;
@@ -83,17 +83,14 @@ export function seedPresets(db: Database): void {
   }
 }
 
-export async function handleListPresets(
-  _db: Database,
-  _request: Request
-): Promise<Response> {
+export async function handleListPresets(_db: Database, _request: Request): Promise<Response> {
   return Response.json(presets);
 }
 
 export async function handleCreateFromPreset(
   db: Database,
   _request: Request,
-  index: number
+  index: number,
 ): Promise<Response> {
   if (index < 0 || index >= presets.length) {
     return Response.json({ error: "Invalid preset index" }, { status: 400 });
@@ -106,7 +103,10 @@ export async function handleCreateFromPreset(
     return Response.json(agent, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-      return Response.json({ error: "An active agent with this name already exists" }, { status: 409 });
+      return Response.json(
+        { error: "An active agent with this name already exists" },
+        { status: 409 },
+      );
     }
     throw error;
   }

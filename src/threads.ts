@@ -1,20 +1,23 @@
-import { Database } from "bun:sqlite";
-import { createThread, getThread, listThreads, updateThread, getAgent, getAgentsForThread, setAgentsForThread, type ResponseMode } from "./db";
+import type { Database } from "bun:sqlite";
+import {
+  createThread,
+  getAgent,
+  getAgentsForThread,
+  getThread,
+  listThreads,
+  type ResponseMode,
+  setAgentsForThread,
+  updateThread,
+} from "./db";
 
-export async function handleListThreads(
-  db: Database,
-  _request: Request
-): Promise<Response> {
+export async function handleListThreads(db: Database, _request: Request): Promise<Response> {
   const threads = listThreads(db);
   return Response.json(threads);
 }
 
-export async function handleCreateThread(
-  db: Database,
-  request: Request
-): Promise<Response> {
+export async function handleCreateThread(db: Database, request: Request): Promise<Response> {
   try {
-    const body = await request.json() as { title?: string };
+    const body = (await request.json()) as { title?: string };
     const title = body.title?.trim();
 
     if (!title) {
@@ -36,7 +39,7 @@ const VALID_RESPONSE_MODES: ResponseMode[] = ["concurrent", "random", "ordered"]
 export async function handleUpdateThread(
   db: Database,
   request: Request,
-  id: number
+  id: number,
 ): Promise<Response> {
   const existing = getThread(db, id);
   if (!existing) {
@@ -44,10 +47,16 @@ export async function handleUpdateThread(
   }
 
   try {
-    const body = await request.json() as { response_mode?: string };
+    const body = (await request.json()) as { response_mode?: string };
 
-    if (body.response_mode !== undefined && !VALID_RESPONSE_MODES.includes(body.response_mode as ResponseMode)) {
-      return Response.json({ error: "Invalid response_mode. Must be concurrent, random, or ordered" }, { status: 400 });
+    if (
+      body.response_mode !== undefined &&
+      !VALID_RESPONSE_MODES.includes(body.response_mode as ResponseMode)
+    ) {
+      return Response.json(
+        { error: "Invalid response_mode. Must be concurrent, random, or ordered" },
+        { status: 400 },
+      );
     }
 
     const updated = updateThread(db, id, {
@@ -66,7 +75,7 @@ export async function handleUpdateThread(
 export async function handleGetThread(
   db: Database,
   _request: Request,
-  id: number
+  id: number,
 ): Promise<Response> {
   const thread = getThread(db, id);
 
@@ -80,7 +89,7 @@ export async function handleGetThread(
 export async function handleGetThreadAgents(
   db: Database,
   _request: Request,
-  threadId: number
+  threadId: number,
 ): Promise<Response> {
   const thread = getThread(db, threadId);
   if (!thread) {
@@ -94,7 +103,7 @@ export async function handleGetThreadAgents(
 export async function handleSetThreadAgents(
   db: Database,
   request: Request,
-  threadId: number
+  threadId: number,
 ): Promise<Response> {
   const thread = getThread(db, threadId);
   if (!thread) {
@@ -102,7 +111,7 @@ export async function handleSetThreadAgents(
   }
 
   try {
-    const body = await request.json() as { agent_ids?: unknown };
+    const body = (await request.json()) as { agent_ids?: unknown };
 
     if (!Array.isArray(body.agent_ids)) {
       return Response.json({ error: "agent_ids must be an array" }, { status: 400 });
@@ -114,10 +123,7 @@ export async function handleSetThreadAgents(
     for (const id of agentIds) {
       const agent = getAgent(db, id);
       if (!agent || !agent.is_active) {
-        return Response.json(
-          { error: `Agent ${id} not found or inactive` },
-          { status: 400 }
-        );
+        return Response.json({ error: `Agent ${id} not found or inactive` }, { status: 400 });
       }
     }
 

@@ -1,6 +1,22 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, getThread, listThreads, updateThread, createMessage, getMessages, createAgent, getAgent, listAgents, updateAgent, deleteAgent, addAgentToThread, getAgentsForThread, setAgentsForThread, removeAllAgentsFromThread } from "./db";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  addAgentToThread,
+  createAgent,
+  createMessage,
+  createThread,
+  deleteAgent,
+  getAgent,
+  getAgentsForThread,
+  getMessages,
+  getThread,
+  initDb,
+  listAgents,
+  listThreads,
+  setAgentsForThread,
+  updateAgent,
+  updateThread,
+} from "./db";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -53,11 +69,11 @@ describe("Database Schema", () => {
       const originalUpdatedAt = thread.updated_at;
 
       // Simulate some time passing and update
-      const updated = createMessage(db, thread.id, "user", null, "Hello");
+      const _updated = createMessage(db, thread.id, "user", null, "Hello");
 
       const retrieved = getThread(db, thread.id);
       expect(new Date(retrieved!.updated_at).getTime()).toBeGreaterThanOrEqual(
-        new Date(originalUpdatedAt).getTime()
+        new Date(originalUpdatedAt).getTime(),
       );
     });
   });
@@ -312,19 +328,26 @@ describe("Database Schema", () => {
 
   describe("indexes", () => {
     test("should create indexes on messages and thread_agents tables", () => {
-      const messageIndexes = db.prepare("PRAGMA index_list('messages')").all() as { name: string }[];
-      const indexNames = messageIndexes.map(i => i.name);
+      const messageIndexes = db.prepare("PRAGMA index_list('messages')").all() as {
+        name: string;
+      }[];
+      const indexNames = messageIndexes.map((i) => i.name);
       expect(indexNames).toContain("idx_messages_thread_id");
       expect(indexNames).toContain("idx_messages_thread_created");
 
-      const taIndexes = db.prepare("PRAGMA index_list('thread_agents')").all() as { name: string }[];
-      const taIndexNames = taIndexes.map(i => i.name);
+      const taIndexes = db.prepare("PRAGMA index_list('thread_agents')").all() as {
+        name: string;
+      }[];
+      const taIndexNames = taIndexes.map((i) => i.name);
       expect(taIndexNames).toContain("idx_thread_agents_thread_id");
     });
 
     test("should create unique index on active agent names", () => {
-      const agentIndexes = db.prepare("PRAGMA index_list('agents')").all() as { name: string; unique: number }[];
-      const uniqueIndex = agentIndexes.find(i => i.name === "idx_active_agent_name");
+      const agentIndexes = db.prepare("PRAGMA index_list('agents')").all() as {
+        name: string;
+        unique: number;
+      }[];
+      const uniqueIndex = agentIndexes.find((i) => i.name === "idx_active_agent_name");
       expect(uniqueIndex).toBeDefined();
       expect(uniqueIndex!.unique).toBe(1);
     });
@@ -552,9 +575,9 @@ describe("Database Schema", () => {
 
       addAgentToThread(db, thread.id, agent.id);
 
-      const row = db.prepare(
-        "SELECT position FROM thread_agents WHERE thread_id = ? AND agent_id = ?"
-      ).get(thread.id, agent.id) as { position: number };
+      const row = db
+        .prepare("SELECT position FROM thread_agents WHERE thread_id = ? AND agent_id = ?")
+        .get(thread.id, agent.id) as { position: number };
       expect(row.position).toBe(0);
     });
   });

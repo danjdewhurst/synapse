@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { Button, TextField, TextArea, Select, Card, Flex, Text, Box } from "@radix-ui/themes";
-import type { Agent, CreateAgentInput, PresetAgent } from "../types";
+import { Box, Button, Card, Flex, Select, Text, TextArea, TextField } from "@radix-ui/themes";
+import { useEffect, useState } from "react";
 import * as api from "../api";
+import type { Agent, CreateAgentInput, PresetAgent } from "../types";
 
 interface AgentManagerProps {
   agents: Agent[];
@@ -31,6 +31,7 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
   const [presets, setPresets] = useState<PresetAgent[]>([]);
   const [addingPreset, setAddingPreset] = useState<number | null>(null);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load on mount
   useEffect(() => {
     loadAgents();
     loadPresets();
@@ -119,7 +120,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
 
   return (
     <div className="agent-manager">
-      <Text size="5" weight="bold" mb="3" as="p">🤖 Agents</Text>
+      <Text size="5" weight="bold" mb="3" as="p">
+        🤖 Agents
+      </Text>
 
       <Flex direction="column" gap="3" mb="4">
         {activeAgents.length === 0 ? (
@@ -128,7 +131,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
           activeAgents.map((agent) => (
             <Card key={agent.id}>
               <Flex justify="between" align="center" mb="1">
-                <Text weight="medium" size="3">{agent.name}</Text>
+                <Text weight="medium" size="3">
+                  {agent.name}
+                </Text>
                 <Text size="5">{agent.avatar_emoji}</Text>
               </Flex>
               <Text size="1" color="gray" mb="2" as="p">
@@ -138,7 +143,12 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
                 <Button variant="outline" size="1" onClick={() => handleEdit(agent)}>
                   Edit
                 </Button>
-                <Button variant="outline" color="red" size="1" onClick={() => handleDelete(agent.id)}>
+                <Button
+                  variant="outline"
+                  color="red"
+                  size="1"
+                  onClick={() => handleDelete(agent.id)}
+                >
                   Delete
                 </Button>
               </Flex>
@@ -147,42 +157,45 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
         )}
       </Flex>
 
-      {presets.length > 0 && (() => {
-        const activeNames = new Set(activeAgents.map((a) => a.name));
-        const available = presets
-          .map((p, i) => ({ ...p, index: i }))
-          .filter((p) => !activeNames.has(p.name));
-        if (available.length === 0) return null;
-        return (
-          <Box mb="4">
-            <Text size="3" weight="bold" mb="2" as="p">Add from Presets</Text>
-            <Flex gap="2" wrap="wrap">
-              {available.map((preset) => (
-                <Card key={preset.index} style={{ flex: "1 1 calc(50% - 4px)", minWidth: 160 }}>
-                  <Flex justify="between" align="start" gap="2">
-                    <Box style={{ flex: 1, minWidth: 0 }}>
-                      <Text weight="medium" size="2">
-                        {preset.avatar_emoji} {preset.name}
-                      </Text>
-                      <Text size="1" color="gray" as="p" style={{ marginTop: 2 }}>
-                        {preset.system_prompt.slice(0, 80)}...
-                      </Text>
-                    </Box>
-                    <Button
-                      size="1"
-                      variant="soft"
-                      disabled={addingPreset === preset.index}
-                      onClick={() => handleAddPreset(preset.index)}
-                    >
-                      {addingPreset === preset.index ? "Adding..." : "Add"}
-                    </Button>
-                  </Flex>
-                </Card>
-              ))}
-            </Flex>
-          </Box>
-        );
-      })()}
+      {presets.length > 0 &&
+        (() => {
+          const activeNames = new Set(activeAgents.map((a) => a.name));
+          const available = presets
+            .map((p, i) => ({ ...p, index: i }))
+            .filter((p) => !activeNames.has(p.name));
+          if (available.length === 0) return null;
+          return (
+            <Box mb="4">
+              <Text size="3" weight="bold" mb="2" as="p">
+                Add from Presets
+              </Text>
+              <Flex gap="2" wrap="wrap">
+                {available.map((preset) => (
+                  <Card key={preset.index} style={{ flex: "1 1 calc(50% - 4px)", minWidth: 160 }}>
+                    <Flex justify="between" align="start" gap="2">
+                      <Box style={{ flex: 1, minWidth: 0 }}>
+                        <Text weight="medium" size="2">
+                          {preset.avatar_emoji} {preset.name}
+                        </Text>
+                        <Text size="1" color="gray" as="p" style={{ marginTop: 2 }}>
+                          {preset.system_prompt.slice(0, 80)}...
+                        </Text>
+                      </Box>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        disabled={addingPreset === preset.index}
+                        onClick={() => handleAddPreset(preset.index)}
+                      >
+                        {addingPreset === preset.index ? "Adding..." : "Add"}
+                      </Button>
+                    </Flex>
+                  </Card>
+                ))}
+              </Flex>
+            </Box>
+          );
+        })()}
 
       <Card>
         <Text size="3" weight="bold" mb="3" as="p">
@@ -191,7 +204,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
 
         <Flex direction="column" gap="3" mb="3">
           <Box>
-            <Text as="label" size="2" weight="medium" mb="1">Name</Text>
+            <Text as="label" size="2" weight="medium" mb="1">
+              Name
+            </Text>
             <TextField.Root
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
@@ -199,7 +214,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
             />
           </Box>
           <Box>
-            <Text as="label" size="2" weight="medium" mb="1">Emoji</Text>
+            <Text as="label" size="2" weight="medium" mb="1">
+              Emoji
+            </Text>
             <TextField.Root
               value={formData.avatar_emoji}
               onChange={(e) => setFormData({ ...formData, avatar_emoji: e.target.value })}
@@ -209,7 +226,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
         </Flex>
 
         <Box mb="3">
-          <Text as="label" size="2" weight="medium" mb="1">System Prompt</Text>
+          <Text as="label" size="2" weight="medium" mb="1">
+            System Prompt
+          </Text>
           <TextArea
             value={formData.system_prompt}
             onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
@@ -220,11 +239,17 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
 
         <Flex direction="column" gap="3" mb="3">
           <Box>
-            <Text as="label" size="2" weight="medium" mb="1">Provider</Text>
+            <Text as="label" size="2" weight="medium" mb="1">
+              Provider
+            </Text>
             <Select.Root
               value={formData.provider}
               onValueChange={(value) =>
-                setFormData({ ...formData, provider: value as "openai" | "anthropic" | "openrouter", api_key_ref: API_KEY_REF_FOR_PROVIDER[value] ?? value })
+                setFormData({
+                  ...formData,
+                  provider: value as "openai" | "anthropic" | "openrouter",
+                  api_key_ref: API_KEY_REF_FOR_PROVIDER[value] ?? value,
+                })
               }
             >
               <Select.Trigger style={{ width: "100%" }} />
@@ -236,7 +261,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
             </Select.Root>
           </Box>
           <Box>
-            <Text as="label" size="2" weight="medium" mb="1">Model</Text>
+            <Text as="label" size="2" weight="medium" mb="1">
+              Model
+            </Text>
             <TextField.Root
               value={formData.model}
               onChange={(e) => setFormData({ ...formData, model: e.target.value })}
@@ -244,7 +271,9 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
             />
           </Box>
           <Box>
-            <Text as="label" size="2" weight="medium" mb="1">Temperature</Text>
+            <Text as="label" size="2" weight="medium" mb="1">
+              Temperature
+            </Text>
             <TextField.Root
               type="number"
               min="0"
@@ -260,12 +289,11 @@ export function AgentManager({ agents, onAgentsUpdate }: AgentManagerProps) {
 
         <Flex gap="2" justify="end">
           {isEditing && (
-            <Button variant="outline" onClick={handleCancel}>Cancel</Button>
+            <Button variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
           )}
-          <Button
-            onClick={handleSave}
-            disabled={isSaving || !formData.name.trim()}
-          >
+          <Button onClick={handleSave} disabled={isSaving || !formData.name.trim()}>
             {isSaving ? "Saving..." : isEditing ? "Update" : "Create"}
           </Button>
         </Flex>

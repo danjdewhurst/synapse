@@ -1,7 +1,13 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, createAgent, deleteAgent, type Thread, type Agent } from "./db";
-import { handleListThreads, handleCreateThread, handleGetThread, handleGetThreadAgents, handleSetThreadAgents } from "./threads";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { type Agent, createAgent, createThread, deleteAgent, initDb, type Thread } from "./db";
+import {
+  handleCreateThread,
+  handleGetThread,
+  handleGetThreadAgents,
+  handleListThreads,
+  handleSetThreadAgents,
+} from "./threads";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -23,7 +29,7 @@ describe("Thread API", () => {
       const response = await handleListThreads(db, request);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as unknown[];
+      const body = (await response.json()) as unknown[];
       expect(body).toEqual([]);
     });
 
@@ -35,7 +41,7 @@ describe("Thread API", () => {
       const response = await handleListThreads(db, request);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Thread[];
+      const body = (await response.json()) as Thread[];
       expect(body).toHaveLength(2);
       expect(body[0].id).toBe(thread2.id);
       expect(body[1].id).toBe(thread1.id);
@@ -53,7 +59,7 @@ describe("Thread API", () => {
       const response = await handleCreateThread(db, request);
 
       expect(response.status).toBe(201);
-      const body = await response.json() as Thread;
+      const body = (await response.json()) as Thread;
       expect(body.id).toBeDefined();
       expect(body.title).toBe("New Thread");
       expect(body.created_at).toBeDefined();
@@ -70,7 +76,7 @@ describe("Thread API", () => {
       const response = await handleCreateThread(db, request);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Title is required");
     });
 
@@ -84,7 +90,7 @@ describe("Thread API", () => {
       const response = await handleCreateThread(db, request);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Title is required");
     });
 
@@ -98,7 +104,7 @@ describe("Thread API", () => {
       const response = await handleCreateThread(db, request);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Invalid JSON");
     });
   });
@@ -111,7 +117,7 @@ describe("Thread API", () => {
       const response = await handleGetThread(db, request, thread.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Thread;
+      const body = (await response.json()) as Thread;
       expect(body.id).toBe(thread.id);
       expect(body.title).toBe("Test Thread");
     });
@@ -121,7 +127,7 @@ describe("Thread API", () => {
       const response = await handleGetThread(db, request, 999);
 
       expect(response.status).toBe(404);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Thread not found");
     });
   });
@@ -139,17 +145,21 @@ describe("Thread API", () => {
       });
 
       // Set agents via PUT first
-      await handleSetThreadAgents(db, new Request(`http://localhost/api/threads/${thread.id}/agents`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_ids: [agent.id] }),
-      }), thread.id);
+      await handleSetThreadAgents(
+        db,
+        new Request(`http://localhost/api/threads/${thread.id}/agents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_ids: [agent.id] }),
+        }),
+        thread.id,
+      );
 
       const request = new Request(`http://localhost/api/threads/${thread.id}/agents`);
       const response = await handleGetThreadAgents(db, request, thread.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toHaveLength(1);
       expect(body[0].id).toBe(agent.id);
     });
@@ -161,7 +171,7 @@ describe("Thread API", () => {
       const response = await handleGetThreadAgents(db, request, thread.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toEqual([]);
     });
 
@@ -202,7 +212,7 @@ describe("Thread API", () => {
       const response = await handleSetThreadAgents(db, request, thread.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toHaveLength(2);
     });
 
@@ -226,21 +236,29 @@ describe("Thread API", () => {
       });
 
       // Set first agent
-      await handleSetThreadAgents(db, new Request(`http://localhost/api/threads/${thread.id}/agents`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_ids: [agent1.id] }),
-      }), thread.id);
+      await handleSetThreadAgents(
+        db,
+        new Request(`http://localhost/api/threads/${thread.id}/agents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_ids: [agent1.id] }),
+        }),
+        thread.id,
+      );
 
       // Replace with second agent
-      const response = await handleSetThreadAgents(db, new Request(`http://localhost/api/threads/${thread.id}/agents`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_ids: [agent2.id] }),
-      }), thread.id);
+      const response = await handleSetThreadAgents(
+        db,
+        new Request(`http://localhost/api/threads/${thread.id}/agents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_ids: [agent2.id] }),
+        }),
+        thread.id,
+      );
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toHaveLength(1);
       expect(body[0].id).toBe(agent2.id);
     });
@@ -257,21 +275,29 @@ describe("Thread API", () => {
       });
 
       // Set agent
-      await handleSetThreadAgents(db, new Request(`http://localhost/api/threads/${thread.id}/agents`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_ids: [agent.id] }),
-      }), thread.id);
+      await handleSetThreadAgents(
+        db,
+        new Request(`http://localhost/api/threads/${thread.id}/agents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_ids: [agent.id] }),
+        }),
+        thread.id,
+      );
 
       // Clear
-      const response = await handleSetThreadAgents(db, new Request(`http://localhost/api/threads/${thread.id}/agents`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ agent_ids: [] }),
-      }), thread.id);
+      const response = await handleSetThreadAgents(
+        db,
+        new Request(`http://localhost/api/threads/${thread.id}/agents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ agent_ids: [] }),
+        }),
+        thread.id,
+      );
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toEqual([]);
     });
 
@@ -310,7 +336,7 @@ describe("Thread API", () => {
 
       const response = await handleSetThreadAgents(db, request, thread.id);
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toContain("not found or inactive");
     });
 

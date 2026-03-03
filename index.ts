@@ -1,25 +1,25 @@
 import { Database } from "bun:sqlite";
 import type { ServerWebSocket } from "bun";
 import index from "./public/index.html";
-import { initDb } from "./src/db";
-import { WebSocketManager } from "./src/websocket";
 import {
-  handleListThreads,
+  handleCreateAgent,
+  handleDeleteAgent,
+  handleGetAgent,
+  handleListAgents,
+  handleUpdateAgent,
+} from "./src/agents";
+import { initDb } from "./src/db";
+import { handleAddMessage, handleGetMessages } from "./src/messages";
+import { handleCreateFromPreset, handleListPresets, seedPresets } from "./src/presets";
+import {
   handleCreateThread,
   handleGetThread,
-  handleUpdateThread,
   handleGetThreadAgents,
+  handleListThreads,
   handleSetThreadAgents,
+  handleUpdateThread,
 } from "./src/threads";
-import { handleGetMessages, handleAddMessage } from "./src/messages";
-import {
-  handleListAgents,
-  handleCreateAgent,
-  handleGetAgent,
-  handleUpdateAgent,
-  handleDeleteAgent,
-} from "./src/agents";
-import { seedPresets, handleListPresets, handleCreateFromPreset } from "./src/presets";
+import { WebSocketManager } from "./src/websocket";
 
 // Initialise database
 const db = new Database("synapse.db");
@@ -59,36 +59,36 @@ const server = Bun.serve({
     "/api/threads/:id": {
       GET: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleGetThread(db, req, id);
       },
       PUT: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleUpdateThread(db, req, id);
       },
     },
     "/api/threads/:id/agents": {
       GET: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleGetThreadAgents(db, req, id);
       },
       PUT: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleSetThreadAgents(db, req, id);
       },
     },
     "/api/threads/:id/messages": {
       GET: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleGetMessages(db, req, id);
       },
       POST: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleAddMessage(db, req, id);
       },
     },
@@ -100,7 +100,7 @@ const server = Bun.serve({
     "/api/presets/:index": {
       POST: (req) => {
         const index = parseInt(req.params.index, 10);
-        if (isNaN(index)) return Response.json({ error: "Invalid index" }, { status: 400 });
+        if (Number.isNaN(index)) return Response.json({ error: "Invalid index" }, { status: 400 });
         return handleCreateFromPreset(db, req, index);
       },
     },
@@ -113,23 +113,23 @@ const server = Bun.serve({
     "/api/agents/:id": {
       GET: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleGetAgent(db, req, id);
       },
       PUT: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleUpdateAgent(db, req, id);
       },
       DELETE: (req) => {
         const id = parseInt(req.params.id, 10);
-        if (isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
+        if (Number.isNaN(id)) return Response.json({ error: "Invalid ID" }, { status: 400 });
         return handleDeleteAgent(db, req, id);
       },
     },
   },
   websocket: {
-    open: (ws: WS) => {
+    open: (_ws: WS) => {
       console.log("WebSocket client connected");
     },
     message: async (ws: WS, message: string) => {

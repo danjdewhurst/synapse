@@ -1,4 +1,4 @@
-import type { Thread, Message, Agent, CreateAgentInput, PresetAgent, ResponseMode } from "./types";
+import type { Agent, CreateAgentInput, Message, PresetAgent, ResponseMode, Thread } from "./types";
 
 const API_BASE = "/api";
 
@@ -35,7 +35,10 @@ export async function getThread(id: number): Promise<Thread> {
   return fetchJson<Thread>(`${API_BASE}/threads/${id}`);
 }
 
-export async function updateThread(id: number, updates: { response_mode?: ResponseMode }): Promise<Thread> {
+export async function updateThread(
+  id: number,
+  updates: { response_mode?: ResponseMode },
+): Promise<Thread> {
   return fetchJson<Thread>(`${API_BASE}/threads/${id}`, {
     method: "PUT",
     body: JSON.stringify(updates),
@@ -57,13 +60,15 @@ export async function setThreadAgents(threadId: number, agentIds: number[]): Pro
 // Messages
 export async function getMessages(
   threadId: number,
-  options?: { limit?: number; offset?: number }
+  options?: { limit?: number; offset?: number },
 ): Promise<Message[]> {
   const params = new URLSearchParams();
   if (options?.limit !== undefined) params.set("limit", String(options.limit));
   if (options?.offset !== undefined) params.set("offset", String(options.offset));
   const query = params.toString();
-  return fetchJson<Message[]>(`${API_BASE}/threads/${threadId}/messages${query ? `?${query}` : ""}`);
+  return fetchJson<Message[]>(
+    `${API_BASE}/threads/${threadId}/messages${query ? `?${query}` : ""}`,
+  );
 }
 
 export async function addMessage(threadId: number, content: string): Promise<Message> {

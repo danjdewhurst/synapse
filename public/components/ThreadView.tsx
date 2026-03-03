@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from "react";
-import { Button, Flex, Text, Popover, Checkbox, Select, IconButton } from "@radix-ui/themes";
+import { Button, Checkbox, Flex, IconButton, Popover, Select, Text } from "@radix-ui/themes";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { Thread, Message, Agent, ResponseMode } from "../types";
+import type { Agent, Message, ResponseMode, Thread } from "../types";
 
 interface ThreadViewProps {
   thread: Thread;
@@ -43,7 +43,7 @@ export function ThreadView({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, typingAgentIds]);
+  }, []);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -51,7 +51,7 @@ export function ThreadView({
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`;
-  }, [input]);
+  }, []);
 
   const handleSend = () => {
     if (!input.trim()) return;
@@ -75,12 +75,12 @@ export function ThreadView({
     return agent ? `${agent.avatar_emoji} ${agent.name}` : "Unknown";
   };
 
-  const activeAgents = agents.filter(a => a.is_active);
+  const activeAgents = agents.filter((a) => a.is_active);
   const isOrdered = thread.response_mode === "ordered";
 
   // Get thread agents in their current order (threadAgentIds preserves position order)
   const orderedThreadAgents = threadAgentIds
-    .map(id => activeAgents.find(a => a.id === id))
+    .map((id) => activeAgents.find((a) => a.id === id))
     .filter((a): a is Agent => a !== undefined);
 
   const moveAgent = (index: number, direction: -1 | 1) => {
@@ -105,7 +105,9 @@ export function ThreadView({
             <Popover.Content style={{ minWidth: 240 }}>
               <Flex direction="column" gap="3">
                 <Flex direction="column" gap="1">
-                  <Text size="1" weight="bold" color="gray">Response mode</Text>
+                  <Text size="1" weight="bold" color="gray">
+                    Response mode
+                  </Text>
                   <Select.Root
                     value={thread.response_mode ?? "concurrent"}
                     onValueChange={(value: string) => onResponseModeChange(value as ResponseMode)}
@@ -120,24 +122,31 @@ export function ThreadView({
                 </Flex>
 
                 <Flex direction="column" gap="1">
-                  <Text size="1" weight="bold" color="gray">Agents</Text>
+                  <Text size="1" weight="bold" color="gray">
+                    Agents
+                  </Text>
                   {activeAgents.length === 0 ? (
-                    <Text size="1" color="gray">No agents available</Text>
+                    <Text size="1" color="gray">
+                      No agents available
+                    </Text>
                   ) : (
                     <Flex direction="column" gap="2">
-                      {activeAgents.map(agent => (
+                      {activeAgents.map((agent) => (
                         <Flex key={agent.id} align="center" gap="2" asChild>
+                          {/* biome-ignore lint/a11y/noLabelWithoutControl: Radix Checkbox renders input internally */}
                           <label>
                             <Checkbox
                               checked={threadAgentIds.includes(agent.id)}
                               onCheckedChange={() => {
                                 const newIds = threadAgentIds.includes(agent.id)
-                                  ? threadAgentIds.filter(id => id !== agent.id)
+                                  ? threadAgentIds.filter((id) => id !== agent.id)
                                   : [...threadAgentIds, agent.id];
                                 onThreadAgentsChange(newIds);
                               }}
                             />
-                            <Text size="2">{agent.avatar_emoji} {agent.name}</Text>
+                            <Text size="2">
+                              {agent.avatar_emoji} {agent.name}
+                            </Text>
                           </label>
                         </Flex>
                       ))}
@@ -147,11 +156,15 @@ export function ThreadView({
 
                 {isOrdered && orderedThreadAgents.length > 1 && (
                   <Flex direction="column" gap="1">
-                    <Text size="1" weight="bold" color="gray">Order</Text>
+                    <Text size="1" weight="bold" color="gray">
+                      Order
+                    </Text>
                     <Flex direction="column" gap="1">
                       {orderedThreadAgents.map((agent, index) => (
                         <Flex key={agent.id} align="center" gap="2" justify="between">
-                          <Text size="2">{agent.avatar_emoji} {agent.name}</Text>
+                          <Text size="2">
+                            {agent.avatar_emoji} {agent.name}
+                          </Text>
                           <Flex gap="1">
                             <IconButton
                               size="1"
@@ -178,9 +191,7 @@ export function ThreadView({
               </Flex>
             </Popover.Content>
           </Popover.Root>
-          <span
-            className={`connection-status ${isConnected ? "connected" : "disconnected"}`}
-          >
+          <span className={`connection-status ${isConnected ? "connected" : "disconnected"}`}>
             {isConnected ? "● Connected" : "● Disconnected"}
           </span>
         </Flex>
@@ -205,9 +216,7 @@ export function ThreadView({
           messages.map((message) => (
             <div
               key={message.id}
-              className={`message ${message.role} ${
-                message.status === "error" ? "error" : ""
-              }`}
+              className={`message ${message.role} ${message.status === "error" ? "error" : ""}`}
               style={
                 message.agent_id
                   ? ({ "--agent-hue": agentHue(message.agent_id) } as React.CSSProperties)
@@ -220,9 +229,7 @@ export function ThreadView({
                 </span>
               </div>
               <div className="message-content">
-                <Markdown remarkPlugins={[remarkGfm]}>
-                  {message.content}
-                </Markdown>
+                <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
               </div>
             </div>
           ))
@@ -232,8 +239,8 @@ export function ThreadView({
           <div className="typing-indicator">
             <span>
               {typingAgentIds
-                .map(id => {
-                  const agent = agents.find(a => a.id === id);
+                .map((id) => {
+                  const agent = agents.find((a) => a.id === id);
                   return agent ? `${agent.avatar_emoji} ${agent.name}` : "Agent";
                 })
                 .join(", ")}{" "}

@@ -1,7 +1,15 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createThread, createAgent, createMessage, addAgentToThread, setAgentsForThread, getMessages } from "./db";
-import { triggerAgentResponses, MAX_CONTEXT_MESSAGES, sanitiseName } from "./orchestration";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  addAgentToThread,
+  createAgent,
+  createMessage,
+  createThread,
+  getMessages,
+  initDb,
+  setAgentsForThread,
+} from "./db";
+import { MAX_CONTEXT_MESSAGES, sanitiseName, triggerAgentResponses } from "./orchestration";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -29,10 +37,10 @@ describe("Agent Orchestration", () => {
           JSON.stringify({
             choices: [{ message: { content: "Mocked AI response" } }],
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
+          { status: 200, headers: { "Content-Type": "application/json" } },
         );
       },
-      { preconnect: undefined, writable: true }
+      { preconnect: undefined, writable: true },
     ) as typeof globalThis.fetch;
   });
 
@@ -120,9 +128,9 @@ describe("Agent Orchestration", () => {
       });
 
       expect(receivedMessages.length).toBe(2);
-      const agentIds = receivedMessages.map(m => m.agent_id).sort();
+      const agentIds = receivedMessages.map((m) => m.agent_id).sort();
       expect(agentIds).toEqual([agent1.id, agent2.id].sort());
-      expect(receivedMessages.every(m => m.content === "Mocked AI response")).toBe(true);
+      expect(receivedMessages.every((m) => m.content === "Mocked AI response")).toBe(true);
     });
 
     test("should do nothing when thread has no agents", async () => {
@@ -187,7 +195,9 @@ describe("Agent Orchestration", () => {
 
       await triggerAgentResponses(db, thread.id, "Final message");
 
-      const requestBody = fetchCalls[0].body as { messages: Array<{ role: string; content: string }> };
+      const requestBody = fetchCalls[0].body as {
+        messages: Array<{ role: string; content: string }>;
+      };
       // system (1) + last 50 existing messages + new user message (1) = 52
       expect(requestBody.messages.length).toBe(MAX_CONTEXT_MESSAGES + 2);
       expect(requestBody.messages[0].role).toBe("system");
@@ -214,23 +224,20 @@ describe("Agent Orchestration", () => {
         async () => {
           callCount++;
           if (callCount === 1) {
-            return new Response(
-              JSON.stringify({ error: "Rate limited" }),
-              {
-                status: 429,
-                headers: {
-                  "Content-Type": "application/json",
-                  "Retry-After": "1",
-                },
-              }
-            );
+            return new Response(JSON.stringify({ error: "Rate limited" }), {
+              status: 429,
+              headers: {
+                "Content-Type": "application/json",
+                "Retry-After": "1",
+              },
+            });
           }
           return new Response(
             JSON.stringify({ choices: [{ message: { content: "Success after retry" } }] }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
+            { status: 200, headers: { "Content-Type": "application/json" } },
           );
         },
-        { preconnect: undefined, writable: true }
+        { preconnect: undefined, writable: true },
       ) as typeof globalThis.fetch;
 
       await triggerAgentResponses(db, thread.id, "Hello");
@@ -258,12 +265,12 @@ describe("Agent Orchestration", () => {
       globalThis.fetch = Object.assign(
         async () => {
           callCount++;
-          return new Response(
-            JSON.stringify({ error: "Unauthorized" }),
-            { status: 401, headers: { "Content-Type": "application/json" } }
-          );
+          return new Response(JSON.stringify({ error: "Unauthorized" }), {
+            status: 401,
+            headers: { "Content-Type": "application/json" },
+          });
         },
-        { preconnect: undefined, writable: true }
+        { preconnect: undefined, writable: true },
       ) as typeof globalThis.fetch;
 
       await triggerAgentResponses(db, thread.id, "Hello");
@@ -313,7 +320,9 @@ describe("Agent Orchestration", () => {
 
       await triggerAgentResponses(db, thread.id, "Hello agent");
 
-      const requestBody = fetchCalls[0].body as { messages: Array<{ role: string; content: string }> };
+      const requestBody = fetchCalls[0].body as {
+        messages: Array<{ role: string; content: string }>;
+      };
 
       expect(requestBody.messages).toBeDefined();
       expect(requestBody.messages[0].role).toBe("system");
@@ -356,7 +365,7 @@ describe("Agent Orchestration", () => {
       let resolveCount = 0;
 
       globalThis.fetch = Object.assign(
-        async (input: string | URL | Request, init?: RequestInit) => {
+        async (_input: string | URL | Request, init?: RequestInit) => {
           const body = init?.body ? JSON.parse(init.body as string) : undefined;
           // Track which agent's system prompt was used to determine call order
           const systemPrompt = body?.messages?.[0]?.content as string;
@@ -367,10 +376,10 @@ describe("Agent Orchestration", () => {
           resolveCount++;
           return new Response(
             JSON.stringify({ choices: [{ message: { content: `Response ${resolveCount}` } }] }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
+            { status: 200, headers: { "Content-Type": "application/json" } },
           );
         },
-        { preconnect: undefined, writable: true }
+        { preconnect: undefined, writable: true },
       ) as typeof globalThis.fetch;
 
       await triggerAgentResponses(db, thread.id, "Hello", undefined, "ordered");
@@ -383,27 +392,39 @@ describe("Agent Orchestration", () => {
       const thread = createThread(db, "Test Thread");
       const agents = [];
       for (let i = 0; i < 5; i++) {
-        agents.push(createAgent(db, {
-          name: `Agent ${i}`,
-          avatar_emoji: "🤖",
-          system_prompt: `You are agent ${i}`,
-          provider: "openai",
-          model: "gpt-4o",
-          api_key_ref: "OPENAI_API_KEY",
-        }));
+        agents.push(
+          createAgent(db, {
+            name: `Agent ${i}`,
+            avatar_emoji: "🤖",
+            system_prompt: `You are agent ${i}`,
+            provider: "openai",
+            model: "gpt-4o",
+            api_key_ref: "OPENAI_API_KEY",
+          }),
+        );
       }
 
-      setAgentsForThread(db, thread.id, agents.map(a => a.id));
+      setAgentsForThread(
+        db,
+        thread.id,
+        agents.map((a) => a.id),
+      );
 
       const receivedMessages: Array<{ agent_id: number | null }> = [];
-      await triggerAgentResponses(db, thread.id, "Hello", (message) => {
-        receivedMessages.push({ agent_id: message.agent_id });
-      }, "random");
+      await triggerAgentResponses(
+        db,
+        thread.id,
+        "Hello",
+        (message) => {
+          receivedMessages.push({ agent_id: message.agent_id });
+        },
+        "random",
+      );
 
       // All agents should respond exactly once
       expect(receivedMessages.length).toBe(5);
-      const respondedIds = receivedMessages.map(m => m.agent_id).sort();
-      expect(respondedIds).toEqual(agents.map(a => a.id).sort());
+      const respondedIds = receivedMessages.map((m) => m.agent_id).sort();
+      expect(respondedIds).toEqual(agents.map((a) => a.id).sort());
     });
 
     test("should execute agents concurrently in concurrent mode (default)", async () => {
@@ -429,9 +450,15 @@ describe("Agent Orchestration", () => {
       addAgentToThread(db, thread.id, agent2.id);
 
       const receivedMessages: Array<{ agent_id: number | null }> = [];
-      await triggerAgentResponses(db, thread.id, "Hello", (message) => {
-        receivedMessages.push({ agent_id: message.agent_id });
-      }, "concurrent");
+      await triggerAgentResponses(
+        db,
+        thread.id,
+        "Hello",
+        (message) => {
+          receivedMessages.push({ agent_id: message.agent_id });
+        },
+        "concurrent",
+      );
 
       expect(receivedMessages.length).toBe(2);
     });
@@ -491,21 +518,25 @@ describe("Agent Orchestration", () => {
       await triggerAgentResponses(db, thread.id, "New message");
 
       // Find the fetch call for the current agent (system prompt match)
-      const currentAgentCall = fetchCalls.find(c => {
+      const currentAgentCall = fetchCalls.find((c) => {
         const body = c.body as { messages: Array<{ role: string; content: string }> };
         return body.messages[0]?.content === "You are the current agent";
       });
 
       expect(currentAgentCall).toBeDefined();
-      const messages = (currentAgentCall!.body as { messages: Array<{ role: string; content: string; name?: string }> }).messages;
+      const messages = (
+        currentAgentCall!.body as {
+          messages: Array<{ role: string; content: string; name?: string }>;
+        }
+      ).messages;
 
       // Other agent's message should have name field
-      const otherAgentMsg = messages.find(m => m.content === "I am the other agent");
+      const otherAgentMsg = messages.find((m) => m.content === "I am the other agent");
       expect(otherAgentMsg).toBeDefined();
       expect(otherAgentMsg!.name).toBe("Other_Agent");
 
       // Current agent's own message should NOT have name field
-      const currentAgentMsg = messages.find(m => m.content === "I am the current agent");
+      const currentAgentMsg = messages.find((m) => m.content === "I am the current agent");
       expect(currentAgentMsg).toBeDefined();
       expect(currentAgentMsg!.name).toBeUndefined();
     });
@@ -546,40 +577,47 @@ describe("Agent Orchestration", () => {
           if (url.includes("anthropic")) {
             return new Response(
               JSON.stringify({ content: [{ text: "Mocked Anthropic response" }] }),
-              { status: 200, headers: { "Content-Type": "application/json" } }
+              { status: 200, headers: { "Content-Type": "application/json" } },
             );
           }
           return new Response(
             JSON.stringify({ choices: [{ message: { content: "Mocked response" } }] }),
-            { status: 200, headers: { "Content-Type": "application/json" } }
+            { status: 200, headers: { "Content-Type": "application/json" } },
           );
         },
-        { preconnect: undefined, writable: true }
+        { preconnect: undefined, writable: true },
       ) as typeof globalThis.fetch;
 
       await triggerAgentResponses(db, thread.id, "New message");
 
       // Find the Anthropic call for the current agent
-      const currentAgentCall = fetchCalls.find(c => {
-        const body = c.body as { system?: string; messages: Array<{ role: string; content: string }> };
+      const currentAgentCall = fetchCalls.find((c) => {
+        const body = c.body as {
+          system?: string;
+          messages: Array<{ role: string; content: string }>;
+        };
         return body.system === "You are the claude agent";
       });
 
       expect(currentAgentCall).toBeDefined();
-      const msgs = (currentAgentCall!.body as { messages: Array<{ role: string; content: string; name?: string }> }).messages;
+      const msgs = (
+        currentAgentCall!.body as {
+          messages: Array<{ role: string; content: string; name?: string }>;
+        }
+      ).messages;
 
       // Other agent's message should have prefixed content
-      const otherAgentMsg = msgs.find(m => m.content.includes("I am the other bot"));
+      const otherAgentMsg = msgs.find((m) => m.content.includes("I am the other bot"));
       expect(otherAgentMsg).toBeDefined();
       expect(otherAgentMsg!.content).toBe("[Other Bot]: I am the other bot");
 
       // Current agent's own message should NOT be prefixed
-      const currentAgentMsg = msgs.find(m => m.content.includes("I am claude"));
+      const currentAgentMsg = msgs.find((m) => m.content.includes("I am claude"));
       expect(currentAgentMsg).toBeDefined();
       expect(currentAgentMsg!.content).toBe("I am claude");
 
       // No name fields should be present on Anthropic messages
-      expect(msgs.every(m => m.name === undefined)).toBe(true);
+      expect(msgs.every((m) => m.name === undefined)).toBe(true);
     });
 
     test("should set name field on other agents' messages for openrouter provider", async () => {
@@ -609,15 +647,19 @@ describe("Agent Orchestration", () => {
 
       await triggerAgentResponses(db, thread.id, "Hey");
 
-      const currentAgentCall = fetchCalls.find(c => {
+      const currentAgentCall = fetchCalls.find((c) => {
         const body = c.body as { messages: Array<{ role: string; content: string }> };
         return body.messages[0]?.content === "You are the router agent";
       });
 
       expect(currentAgentCall).toBeDefined();
-      const messages = (currentAgentCall!.body as { messages: Array<{ role: string; content: string; name?: string }> }).messages;
+      const messages = (
+        currentAgentCall!.body as {
+          messages: Array<{ role: string; content: string; name?: string }>;
+        }
+      ).messages;
 
-      const otherMsg = messages.find(m => m.content === "Hello from helper");
+      const otherMsg = messages.find((m) => m.content === "Hello from helper");
       expect(otherMsg).toBeDefined();
       expect(otherMsg!.name).toBe("Helper_Agent");
     });

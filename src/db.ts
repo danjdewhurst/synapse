@@ -1,4 +1,4 @@
-import { Database, type SQLQueryBindings } from "bun:sqlite";
+import type { Database, SQLQueryBindings } from "bun:sqlite";
 
 // Types
 export type ResponseMode = "concurrent" | "random" | "ordered";
@@ -115,7 +115,9 @@ export function initDb(db: Database): void {
   `);
 
   // Migration: add 'openrouter' to agents provider CHECK constraint
-  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'").get() as { sql: string } | undefined;
+  const tableInfo = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='agents'")
+    .get() as { sql: string } | undefined;
   if (tableInfo && !tableInfo.sql.includes("openrouter")) {
     db.exec("PRAGMA foreign_keys = OFF");
     db.exec(`
@@ -139,23 +141,32 @@ export function initDb(db: Database): void {
   }
 
   // Migration: add response_mode to threads
-  const threadInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='threads'").get() as { sql: string } | undefined;
+  const threadInfo = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='threads'")
+    .get() as { sql: string } | undefined;
   if (threadInfo && !threadInfo.sql.includes("response_mode")) {
-    db.exec("ALTER TABLE threads ADD COLUMN response_mode TEXT NOT NULL DEFAULT 'concurrent' CHECK (response_mode IN ('concurrent', 'random', 'ordered'))");
+    db.exec(
+      "ALTER TABLE threads ADD COLUMN response_mode TEXT NOT NULL DEFAULT 'concurrent' CHECK (response_mode IN ('concurrent', 'random', 'ordered'))",
+    );
   }
 
   // Migration: add position to thread_agents
-  const taInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='thread_agents'").get() as { sql: string } | undefined;
+  const taInfo = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='thread_agents'")
+    .get() as { sql: string } | undefined;
   if (taInfo && !taInfo.sql.includes("position")) {
     db.exec("ALTER TABLE thread_agents ADD COLUMN position INTEGER NOT NULL DEFAULT 0");
   }
 
   // Indexes for common queries
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON messages(thread_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_messages_thread_created ON messages(thread_id, created_at)",
+  );
   db.exec("CREATE INDEX IF NOT EXISTS idx_thread_agents_thread_id ON thread_agents(thread_id)");
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_active_agent_name ON agents(name) WHERE is_active = TRUE");
-
+  db.exec(
+    "CREATE UNIQUE INDEX IF NOT EXISTS idx_active_agent_name ON agents(name) WHERE is_active = TRUE",
+  );
 }
 
 // Helper to convert SQLite integer booleans to JS booleans
@@ -167,17 +178,19 @@ function normaliseAgent(agent: Agent): Agent {
 }
 
 // Thread operations
-export function createThread(db: Database, title: string, responseMode: ResponseMode = "concurrent"): Thread {
-  const stmt = db.prepare(
-    "INSERT INTO threads (title, response_mode) VALUES (?, ?) RETURNING *"
-  );
+export function createThread(
+  db: Database,
+  title: string,
+  responseMode: ResponseMode = "concurrent",
+): Thread {
+  const stmt = db.prepare("INSERT INTO threads (title, response_mode) VALUES (?, ?) RETURNING *");
   return stmt.get(title, responseMode) as Thread;
 }
 
 export function updateThread(
   db: Database,
   id: number,
-  updates: { response_mode?: ResponseMode }
+  updates: { response_mode?: ResponseMode },
 ): Thread | null {
   const existing = getThread(db, id);
   if (!existing) return null;
@@ -192,11 +205,9 @@ export function updateThread(
 
   if (fields.length === 0) return existing;
 
-  const stmt = db.prepare(
-    `UPDATE threads SET ${fields.join(", ")} WHERE id = ? RETURNING *`
-  );
+  const stmt = db.prepare(`UPDATE threads SET ${fields.join(", ")} WHERE id = ? RETURNING *`);
   values.push(id);
-  return stmt.get(...values as SQLQueryBindings[]) as Thread | null;
+  return stmt.get(...(values as SQLQueryBindings[])) as Thread | null;
 }
 
 export function getThread(db: Database, id: number): Thread | null {
@@ -217,10 +228,10 @@ export function createMessage(
   role: "user" | "agent",
   agentId: number | null,
   content: string,
-  status: "complete" | "error" = "complete"
+  status: "complete" | "error" = "complete",
 ): Message {
   const insertStmt = db.prepare(
-    "INSERT INTO messages (thread_id, role, agent_id, content, status) VALUES (?, ?, ?, ?, ?) RETURNING id"
+    "INSERT INTO messages (thread_id, role, agent_id, content, status) VALUES (?, ?, ?, ?, ?) RETURNING id",
   );
   const { id } = insertStmt.get(threadId, role, agentId, content, status) as { id: number };
 
@@ -228,7 +239,7 @@ export function createMessage(
     `SELECT m.*, a.name AS agent_name, a.avatar_emoji AS agent_avatar_emoji
      FROM messages m
      LEFT JOIN agents a ON m.agent_id = a.id
-     WHERE m.id = ?`
+     WHERE m.id = ?`,
   );
   return selectStmt.get(id) as Message;
 }
@@ -236,7 +247,7 @@ export function createMessage(
 export function getMessages(
   db: Database,
   threadId: number,
-  options?: { limit?: number; offset?: number }
+  options?: { limit?: number; offset?: number },
 ): Message[] {
   let sql = `SELECT m.*, a.name AS agent_name, a.avatar_emoji AS agent_avatar_emoji
     FROM messages m
@@ -258,18 +269,15 @@ export function getMessages(
   }
 
   const stmt = db.prepare(sql);
-  return stmt.all(...params as SQLQueryBindings[]) as Message[];
+  return stmt.all(...(params as SQLQueryBindings[])) as Message[];
 }
 
 // Agent operations
-export function createAgent(
-  db: Database,
-  input: CreateAgentInput
-): Agent {
+export function createAgent(db: Database, input: CreateAgentInput): Agent {
   const stmt = db.prepare(
     `INSERT INTO agents (name, avatar_emoji, system_prompt, provider, model, api_key_ref, temperature)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     RETURNING *`
+     RETURNING *`,
   );
   const result = stmt.get(
     input.name,
@@ -278,7 +286,7 @@ export function createAgent(
     input.provider,
     input.model,
     input.api_key_ref,
-    input.temperature ?? 0.7
+    input.temperature ?? 0.7,
   ) as Agent;
   return normaliseAgent(result);
 }
@@ -297,7 +305,9 @@ export function listAgents(db: Database): Agent[] {
 export function updateAgent(
   db: Database,
   id: number,
-  updates: Partial<Omit<CreateAgentInput, "temperature"> & { temperature: number; is_active: boolean }>
+  updates: Partial<
+    Omit<CreateAgentInput, "temperature"> & { temperature: number; is_active: boolean }
+  >,
 ): Agent | null {
   const existing = getAgent(db, id);
   if (!existing) return null;
@@ -340,30 +350,22 @@ export function updateAgent(
 
   if (fields.length === 0) return existing;
 
-  const stmt = db.prepare(
-    `UPDATE agents SET ${fields.join(", ")} WHERE id = ? RETURNING *`
-  );
+  const stmt = db.prepare(`UPDATE agents SET ${fields.join(", ")} WHERE id = ? RETURNING *`);
   values.push(id);
-  const result = stmt.get(...values as SQLQueryBindings[]) as Agent | undefined;
+  const result = stmt.get(...(values as SQLQueryBindings[])) as Agent | undefined;
   return result ? normaliseAgent(result) : null;
 }
 
 export function deleteAgent(db: Database, id: number): boolean {
-  const stmt = db.prepare(
-    "UPDATE agents SET is_active = FALSE WHERE id = ?"
-  );
+  const stmt = db.prepare("UPDATE agents SET is_active = FALSE WHERE id = ?");
   const result = stmt.run(id);
   return result.changes > 0;
 }
 
 // Thread-agent junction operations
-export function addAgentToThread(
-  db: Database,
-  threadId: number,
-  agentId: number
-): void {
+export function addAgentToThread(db: Database, threadId: number, agentId: number): void {
   const stmt = db.prepare(
-    "INSERT OR IGNORE INTO thread_agents (thread_id, agent_id) VALUES (?, ?)"
+    "INSERT OR IGNORE INTO thread_agents (thread_id, agent_id) VALUES (?, ?)",
   );
   stmt.run(threadId, agentId);
 }
@@ -374,7 +376,9 @@ export function removeAllAgentsFromThread(db: Database, threadId: number): void 
 
 export function setAgentsForThread(db: Database, threadId: number, agentIds: number[]): void {
   removeAllAgentsFromThread(db, threadId);
-  const stmt = db.prepare("INSERT INTO thread_agents (thread_id, agent_id, position) VALUES (?, ?, ?)");
+  const stmt = db.prepare(
+    "INSERT INTO thread_agents (thread_id, agent_id, position) VALUES (?, ?, ?)",
+  );
   for (let i = 0; i < agentIds.length; i++) {
     stmt.run(threadId, agentIds[i]!, i);
   }

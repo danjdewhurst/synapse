@@ -1,5 +1,5 @@
+import { Button, Flex, Text } from "@radix-ui/themes";
 import React from "react";
-import { Flex, Text, Button } from "@radix-ui/themes";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -36,7 +36,9 @@ export class ErrorBoundary extends React.Component<
           justify="center"
           style={{ height: "100vh", padding: "2rem", textAlign: "center" }}
         >
-          <Text size="5" weight="bold" mb="2">Something went wrong</Text>
+          <Text size="5" weight="bold" mb="2">
+            Something went wrong
+          </Text>
           <Text size="2" color="gray" mb="4">
             {this.state.error?.message || "An unexpected error occurred"}
           </Text>

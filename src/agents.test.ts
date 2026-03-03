@@ -1,13 +1,13 @@
-import { test, expect, describe, beforeEach, afterEach } from "bun:test";
 import { Database } from "bun:sqlite";
-import { initDb, createAgent, type Agent } from "./db";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
-  handleListAgents,
   handleCreateAgent,
-  handleGetAgent,
-  handleUpdateAgent,
   handleDeleteAgent,
+  handleGetAgent,
+  handleListAgents,
+  handleUpdateAgent,
 } from "./agents";
+import { type Agent, createAgent, initDb } from "./db";
 
 const TEST_DB_PATH = ":memory:";
 
@@ -39,7 +39,7 @@ describe("Agents API", () => {
       const response = await handleListAgents(db, request);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toEqual([]);
     });
 
@@ -51,7 +51,7 @@ describe("Agents API", () => {
       const response = await handleListAgents(db, request);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent[];
+      const body = (await response.json()) as Agent[];
       expect(body).toHaveLength(2);
       expect(body[0].name).toBe("Agent 2");
       expect(body[1].name).toBe("Test Agent");
@@ -69,7 +69,7 @@ describe("Agents API", () => {
       const response = await handleCreateAgent(db, request);
 
       expect(response.status).toBe(201);
-      const body = await response.json() as Agent;
+      const body = (await response.json()) as Agent;
       expect(body.id).toBeDefined();
       expect(body.name).toBe("Test Agent");
       expect(body.avatar_emoji).toBe("🤖");
@@ -92,7 +92,7 @@ describe("Agents API", () => {
       const response = await handleCreateAgent(db, request);
 
       expect(response.status).toBe(201);
-      const body = await response.json() as Agent;
+      const body = (await response.json()) as Agent;
       expect(body.temperature).toBe(0.7);
     });
 
@@ -106,7 +106,7 @@ describe("Agents API", () => {
       const response = await handleCreateAgent(db, request);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toContain("required");
     });
 
@@ -120,7 +120,7 @@ describe("Agents API", () => {
       const response = await handleCreateAgent(db, request);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toContain("provider");
     });
 
@@ -134,27 +134,33 @@ describe("Agents API", () => {
       const response = await handleCreateAgent(db, request);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Invalid JSON");
     });
 
     test("should return 409 when creating agent with duplicate active name", async () => {
       // Create first agent
-      await handleCreateAgent(db, new Request("http://localhost/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validAgentInput),
-      }));
+      await handleCreateAgent(
+        db,
+        new Request("http://localhost/api/agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(validAgentInput),
+        }),
+      );
 
       // Try to create second agent with same name
-      const response = await handleCreateAgent(db, new Request("http://localhost/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validAgentInput),
-      }));
+      const response = await handleCreateAgent(
+        db,
+        new Request("http://localhost/api/agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(validAgentInput),
+        }),
+      );
 
       expect(response.status).toBe(409);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toContain("already exists");
     });
 
@@ -162,13 +168,18 @@ describe("Agents API", () => {
       const request = new Request("http://localhost/api/agents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...validAgentInput, provider: "openrouter", model: "google/gemini-2.0-flash-001", api_key_ref: "OPENROUTER_API_KEY" }),
+        body: JSON.stringify({
+          ...validAgentInput,
+          provider: "openrouter",
+          model: "google/gemini-2.0-flash-001",
+          api_key_ref: "OPENROUTER_API_KEY",
+        }),
       });
 
       const response = await handleCreateAgent(db, request);
 
       expect(response.status).toBe(201);
-      const body = await response.json() as Agent;
+      const body = (await response.json()) as Agent;
       expect(body.provider).toBe("openrouter");
       expect(body.model).toBe("google/gemini-2.0-flash-001");
     });
@@ -179,25 +190,36 @@ describe("Agents API", () => {
       const request = new Request(`http://localhost/api/agents/${agent.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: "openrouter", model: "google/gemini-2.0-flash-001", api_key_ref: "OPENROUTER_API_KEY" }),
+        body: JSON.stringify({
+          provider: "openrouter",
+          model: "google/gemini-2.0-flash-001",
+          api_key_ref: "OPENROUTER_API_KEY",
+        }),
       });
 
       const response = await handleUpdateAgent(db, request, agent.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent;
+      const body = (await response.json()) as Agent;
       expect(body.provider).toBe("openrouter");
     });
 
     test("should allow creating agent with name of soft-deleted agent", async () => {
       const agent = createAgent(db, validAgentInput);
-      await handleDeleteAgent(db, new Request(`http://localhost/api/agents/${agent.id}`, { method: "DELETE" }), agent.id);
+      await handleDeleteAgent(
+        db,
+        new Request(`http://localhost/api/agents/${agent.id}`, { method: "DELETE" }),
+        agent.id,
+      );
 
-      const response = await handleCreateAgent(db, new Request("http://localhost/api/agents", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(validAgentInput),
-      }));
+      const response = await handleCreateAgent(
+        db,
+        new Request("http://localhost/api/agents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(validAgentInput),
+        }),
+      );
 
       expect(response.status).toBe(201);
     });
@@ -211,7 +233,7 @@ describe("Agents API", () => {
       const response = await handleGetAgent(db, request, agent.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent;
+      const body = (await response.json()) as Agent;
       expect(body.id).toBe(agent.id);
       expect(body.name).toBe("Test Agent");
     });
@@ -221,7 +243,7 @@ describe("Agents API", () => {
       const response = await handleGetAgent(db, request, 999);
 
       expect(response.status).toBe(404);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Agent not found");
     });
   });
@@ -239,7 +261,7 @@ describe("Agents API", () => {
       const response = await handleUpdateAgent(db, request, agent.id);
 
       expect(response.status).toBe(200);
-      const body = await response.json() as Agent;
+      const body = (await response.json()) as Agent;
       expect(body.name).toBe("Updated Agent");
       expect(body.temperature).toBe(0.5);
       expect(body.system_prompt).toBe("You are a helpful assistant"); // unchanged
@@ -255,7 +277,7 @@ describe("Agents API", () => {
       const response = await handleUpdateAgent(db, request, 999);
 
       expect(response.status).toBe(404);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Agent not found");
     });
 
@@ -271,7 +293,7 @@ describe("Agents API", () => {
       const response = await handleUpdateAgent(db, request, agent.id);
 
       expect(response.status).toBe(400);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toContain("provider");
     });
 
@@ -288,7 +310,7 @@ describe("Agents API", () => {
       const response = await handleUpdateAgent(db, request, agent2.id);
 
       expect(response.status).toBe(409);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toContain("already exists");
     });
   });
@@ -308,7 +330,7 @@ describe("Agents API", () => {
       // Verify agent is marked inactive
       const getRequest = new Request(`http://localhost/api/agents/${agent.id}`);
       const getResponse = await handleGetAgent(db, getRequest, agent.id);
-      const body = await getResponse.json() as Agent;
+      const body = (await getResponse.json()) as Agent;
       expect(body.is_active).toBe(false);
     });
 
@@ -320,7 +342,7 @@ describe("Agents API", () => {
       const response = await handleDeleteAgent(db, request, 999);
 
       expect(response.status).toBe(404);
-      const body = await response.json() as { error: string };
+      const body = (await response.json()) as { error: string };
       expect(body.error).toBe("Agent not found");
     });
   });

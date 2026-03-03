@@ -1,10 +1,10 @@
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 import { createMessage, getMessages, getThread } from "./db";
 
 export async function handleAddMessage(
   db: Database,
   request: Request,
-  threadId: number
+  threadId: number,
 ): Promise<Response> {
   // Verify thread exists
   const thread = getThread(db, threadId);
@@ -13,7 +13,7 @@ export async function handleAddMessage(
   }
 
   try {
-    const body = await request.json() as { content?: string; agent_id?: number };
+    const body = (await request.json()) as { content?: string; agent_id?: number };
     const content = body.content?.trim();
 
     if (!content) {
@@ -36,7 +36,7 @@ export async function handleAddMessage(
 export async function handleGetMessages(
   db: Database,
   request: Request,
-  threadId: number
+  threadId: number,
 ): Promise<Response> {
   // Verify thread exists
   const thread = getThread(db, threadId);

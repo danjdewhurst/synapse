@@ -1,10 +1,27 @@
-import { Database } from "bun:sqlite";
-import { createAgent, getAgent, listAgents, updateAgent, deleteAgent, type CreateAgentInput } from "./db";
+import type { Database } from "bun:sqlite";
+import {
+  type CreateAgentInput,
+  createAgent,
+  deleteAgent,
+  getAgent,
+  listAgents,
+  updateAgent,
+} from "./db";
 
 const VALID_PROVIDERS = ["openai", "anthropic", "openrouter"] as const;
 
-function validateAgentInput(body: Record<string, unknown>): { error?: string; input?: CreateAgentInput } {
-  const requiredFields = ["name", "avatar_emoji", "system_prompt", "provider", "model", "api_key_ref"];
+function validateAgentInput(body: Record<string, unknown>): {
+  error?: string;
+  input?: CreateAgentInput;
+} {
+  const requiredFields = [
+    "name",
+    "avatar_emoji",
+    "system_prompt",
+    "provider",
+    "model",
+    "api_key_ref",
+  ];
 
   for (const field of requiredFields) {
     if (!body[field] || (typeof body[field] === "string" && !body[field].toString().trim())) {
@@ -13,7 +30,7 @@ function validateAgentInput(body: Record<string, unknown>): { error?: string; in
   }
 
   const provider = body.provider as string;
-  if (!VALID_PROVIDERS.includes(provider as typeof VALID_PROVIDERS[number])) {
+  if (!VALID_PROVIDERS.includes(provider as (typeof VALID_PROVIDERS)[number])) {
     return { error: `provider must be one of: ${VALID_PROVIDERS.join(", ")}` };
   }
 
@@ -32,20 +49,14 @@ function validateAgentInput(body: Record<string, unknown>): { error?: string; in
   };
 }
 
-export async function handleListAgents(
-  db: Database,
-  _request: Request
-): Promise<Response> {
+export async function handleListAgents(db: Database, _request: Request): Promise<Response> {
   const agents = listAgents(db);
   return Response.json(agents);
 }
 
-export async function handleCreateAgent(
-  db: Database,
-  request: Request
-): Promise<Response> {
+export async function handleCreateAgent(db: Database, request: Request): Promise<Response> {
   try {
-    const body = await request.json() as Record<string, unknown>;
+    const body = (await request.json()) as Record<string, unknown>;
     const { error, input } = validateAgentInput(body);
 
     if (error || !input) {
@@ -59,7 +70,10 @@ export async function handleCreateAgent(
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-      return Response.json({ error: "An active agent with this name already exists" }, { status: 409 });
+      return Response.json(
+        { error: "An active agent with this name already exists" },
+        { status: 409 },
+      );
     }
     throw error;
   }
@@ -68,7 +82,7 @@ export async function handleCreateAgent(
 export async function handleGetAgent(
   db: Database,
   _request: Request,
-  id: number
+  id: number,
 ): Promise<Response> {
   const agent = getAgent(db, id);
 
@@ -82,7 +96,7 @@ export async function handleGetAgent(
 export async function handleUpdateAgent(
   db: Database,
   request: Request,
-  id: number
+  id: number,
 ): Promise<Response> {
   // Verify agent exists
   const existing = getAgent(db, id);
@@ -91,14 +105,14 @@ export async function handleUpdateAgent(
   }
 
   try {
-    const body = await request.json() as Record<string, unknown>;
+    const body = (await request.json()) as Record<string, unknown>;
 
     // Validate provider if provided
     if (body.provider !== undefined) {
-      if (!VALID_PROVIDERS.includes(body.provider as typeof VALID_PROVIDERS[number])) {
+      if (!VALID_PROVIDERS.includes(body.provider as (typeof VALID_PROVIDERS)[number])) {
         return Response.json(
           { error: `provider must be one of: ${VALID_PROVIDERS.join(", ")}` },
-          { status: 400 }
+          { status: 400 },
         );
       }
     }
@@ -108,7 +122,8 @@ export async function handleUpdateAgent(
     if (body.name !== undefined) updates.name = String(body.name);
     if (body.avatar_emoji !== undefined) updates.avatar_emoji = String(body.avatar_emoji);
     if (body.system_prompt !== undefined) updates.system_prompt = String(body.system_prompt);
-    if (body.provider !== undefined) updates.provider = body.provider as "openai" | "anthropic" | "openrouter";
+    if (body.provider !== undefined)
+      updates.provider = body.provider as "openai" | "anthropic" | "openrouter";
     if (body.model !== undefined) updates.model = String(body.model);
     if (body.api_key_ref !== undefined) updates.api_key_ref = String(body.api_key_ref);
     if (body.temperature !== undefined) updates.temperature = Number(body.temperature);
@@ -125,7 +140,10 @@ export async function handleUpdateAgent(
       return Response.json({ error: "Invalid JSON" }, { status: 400 });
     }
     if (error instanceof Error && error.message.includes("UNIQUE constraint failed")) {
-      return Response.json({ error: "An active agent with this name already exists" }, { status: 409 });
+      return Response.json(
+        { error: "An active agent with this name already exists" },
+        { status: 409 },
+      );
     }
     throw error;
   }
@@ -134,7 +152,7 @@ export async function handleUpdateAgent(
 export async function handleDeleteAgent(
   db: Database,
   _request: Request,
-  id: number
+  id: number,
 ): Promise<Response> {
   // Verify agent exists
   const existing = getAgent(db, id);
