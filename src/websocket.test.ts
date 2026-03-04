@@ -214,6 +214,159 @@ describe("WebSocket Manager", () => {
       expect(lastTyping.agentIds).toEqual([]);
     });
 
+    test("should only trigger mentioned agents when mentionedAgentIds provided", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "Agent One",
+        avatar_emoji: "1️⃣",
+        system_prompt: "You are agent one",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Agent Two",
+        avatar_emoji: "2️⃣",
+        system_prompt: "You are agent two",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      addAgentToThread(db, thread.id, agent1.id);
+      addAgentToThread(db, thread.id, agent2.id);
+
+      process.env.OPENAI_API_KEY = "test-key";
+      const fetchCalls: Array<{ body: unknown }> = [];
+      globalThis.fetch = Object.assign(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          const body = init?.body ? JSON.parse(init.body as string) : undefined;
+          fetchCalls.push({ body });
+          return new Response(
+            JSON.stringify({ choices: [{ message: { content: "Response" } }] }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        },
+        { preconnect: undefined, writable: true },
+      ) as typeof globalThis.fetch;
+
+      const sentMessages: string[] = [];
+      const mockWs = {
+        send: (msg: string) => sentMessages.push(msg),
+        data: { threadId: thread.id },
+      } as unknown as ServerWebSocket<{ threadId: number }>;
+
+      wsManager.joinThread(mockWs, thread.id);
+      await wsManager.handleClientMessage(
+        mockWs,
+        JSON.stringify({ content: "@Agent One hello", mentionedAgentIds: [agent1.id] }),
+      );
+
+      // Wait for async triggerAgents
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Only agent1 should have been called
+      expect(fetchCalls.length).toBe(1);
+      const body = fetchCalls[0]!.body as { messages: Array<{ content: string }> };
+      expect(body.messages[0]!.content).toBe("You are agent one");
+    });
+
+    test("should trigger all agents when no mentionedAgentIds provided", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "Agent A",
+        avatar_emoji: "🅰️",
+        system_prompt: "You are agent A",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Agent B",
+        avatar_emoji: "🅱️",
+        system_prompt: "You are agent B",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      addAgentToThread(db, thread.id, agent1.id);
+      addAgentToThread(db, thread.id, agent2.id);
+
+      process.env.OPENAI_API_KEY = "test-key";
+      const fetchCalls: Array<{ body: unknown }> = [];
+      globalThis.fetch = Object.assign(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          const body = init?.body ? JSON.parse(init.body as string) : undefined;
+          fetchCalls.push({ body });
+          return new Response(
+            JSON.stringify({ choices: [{ message: { content: "Response" } }] }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        },
+        { preconnect: undefined, writable: true },
+      ) as typeof globalThis.fetch;
+
+      const sentMessages: string[] = [];
+      const mockWs = {
+        send: (msg: string) => sentMessages.push(msg),
+        data: { threadId: thread.id },
+      } as unknown as ServerWebSocket<{ threadId: number }>;
+
+      wsManager.joinThread(mockWs, thread.id);
+      await wsManager.handleClientMessage(
+        mockWs,
+        JSON.stringify({ content: "Hello everyone" }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Both agents should have been called
+      expect(fetchCalls.length).toBe(2);
+    });
+
+    test("should silently ignore invalid mentionedAgentIds", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "Valid Agent",
+        avatar_emoji: "✅",
+        system_prompt: "You are valid",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      addAgentToThread(db, thread.id, agent.id);
+
+      process.env.OPENAI_API_KEY = "test-key";
+      const fetchCalls: Array<{ body: unknown }> = [];
+      globalThis.fetch = Object.assign(
+        async (_input: string | URL | Request, init?: RequestInit) => {
+          const body = init?.body ? JSON.parse(init.body as string) : undefined;
+          fetchCalls.push({ body });
+          return new Response(
+            JSON.stringify({ choices: [{ message: { content: "Response" } }] }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        },
+        { preconnect: undefined, writable: true },
+      ) as typeof globalThis.fetch;
+
+      const sentMessages: string[] = [];
+      const mockWs = {
+        send: (msg: string) => sentMessages.push(msg),
+        data: { threadId: thread.id },
+      } as unknown as ServerWebSocket<{ threadId: number }>;
+
+      wsManager.joinThread(mockWs, thread.id);
+      await wsManager.handleClientMessage(
+        mockWs,
+        JSON.stringify({ content: "@Nobody hello", mentionedAgentIds: [99999] }),
+      );
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // No agents should be triggered (99999 doesn't match any thread agent)
+      expect(fetchCalls.length).toBe(0);
+    });
+
     test("should return error when not in a thread", async () => {
       const mockWs = {
         send: (_msg: string) => {},

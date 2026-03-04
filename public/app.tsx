@@ -83,8 +83,8 @@ function App() {
     onTyping: handleTyping,
   });
 
-  const handleSendMessage = (content: string) => {
-    sendMessage(content);
+  const handleSendMessage = (content: string, mentionedAgentIds?: number[]) => {
+    sendMessage(content, mentionedAgentIds);
   };
 
   const handleThreadSelect = (threadId: number) => {

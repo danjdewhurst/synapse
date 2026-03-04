@@ -487,6 +487,69 @@ describe("Agent Orchestration", () => {
     });
   });
 
+  describe("pre-supplied agents", () => {
+    test("should use provided agents instead of fetching from DB", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent1 = createAgent(db, {
+        name: "DB Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are a DB agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      const agent2 = createAgent(db, {
+        name: "Supplied Agent",
+        avatar_emoji: "🎯",
+        system_prompt: "You are a supplied agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+
+      // Add agent1 to thread in DB, but supply only agent2
+      addAgentToThread(db, thread.id, agent1.id);
+
+      const receivedMessages: Array<{ agent_id: number | null }> = [];
+      await triggerAgentResponses(
+        db,
+        thread.id,
+        "Hello",
+        (message) => {
+          receivedMessages.push({ agent_id: message.agent_id });
+        },
+        "concurrent",
+        undefined,
+        [agent2],
+      );
+
+      // Only the supplied agent should have responded
+      expect(receivedMessages.length).toBe(1);
+      expect(receivedMessages[0].agent_id).toBe(agent2.id);
+    });
+
+    test("should fetch agents from DB when none supplied", async () => {
+      const thread = createThread(db, "Test Thread");
+      const agent = createAgent(db, {
+        name: "DB Agent",
+        avatar_emoji: "🤖",
+        system_prompt: "You are a DB agent",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key_ref: "OPENAI_API_KEY",
+      });
+      addAgentToThread(db, thread.id, agent.id);
+
+      const receivedMessages: Array<{ agent_id: number | null }> = [];
+      await triggerAgentResponses(db, thread.id, "Hello", (message) => {
+        receivedMessages.push({ agent_id: message.agent_id });
+      });
+
+      expect(receivedMessages.length).toBe(1);
+      expect(receivedMessages[0].agent_id).toBe(agent.id);
+    });
+  });
+
   describe("message attribution", () => {
     test("should set name field on other agents' messages for openai provider", async () => {
       const thread = createThread(db, "Test Thread");

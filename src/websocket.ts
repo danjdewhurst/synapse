@@ -70,7 +70,7 @@ export class WebSocketManager {
     }
 
     try {
-      const data = JSON.parse(message) as { content?: string };
+      const data = JSON.parse(message) as { content?: string; mentionedAgentIds?: number[] };
 
       if (!data.content?.trim()) {
         ws.send(JSON.stringify({ error: "Content is required" }));
@@ -94,7 +94,7 @@ export class WebSocketManager {
       });
 
       // Trigger agent responses in background
-      this.triggerAgents(threadId, data.content.trim());
+      this.triggerAgents(threadId, data.content.trim(), data.mentionedAgentIds);
 
       return true;
     } catch (error) {
@@ -107,13 +107,24 @@ export class WebSocketManager {
     }
   }
 
-  private async triggerAgents(threadId: number, userMessage: string): Promise<void> {
+  private async triggerAgents(
+    threadId: number,
+    userMessage: string,
+    mentionedAgentIds?: number[],
+  ): Promise<void> {
     // Check if there are any agents assigned before broadcasting typing
     const thread = getThread(this.db, threadId);
     if (!thread) return;
 
-    const agents = getAgentsForThread(this.db, threadId);
+    let agents = getAgentsForThread(this.db, threadId);
     if (agents.length === 0) return;
+
+    // Filter to only mentioned agents if specified
+    if (mentionedAgentIds && mentionedAgentIds.length > 0) {
+      const mentionedSet = new Set(mentionedAgentIds);
+      agents = agents.filter((a) => mentionedSet.has(a.id));
+      if (agents.length === 0) return;
+    }
 
     const responseMode = thread.response_mode ?? "concurrent";
     const isSequential = responseMode !== "concurrent";
@@ -136,6 +147,8 @@ export class WebSocketManager {
             this.broadcastToThread(threadId, { type: "typing", agentIds: [...typingAgentIds] });
           },
           responseMode,
+          undefined,
+          agents,
         );
       } else {
         // Sequential: typing indicator shows only the current agent (handled naturally
@@ -152,6 +165,7 @@ export class WebSocketManager {
             // Called before each agent starts — show only this agent as typing
             this.broadcastToThread(threadId, { type: "typing", agentIds: [agent.id] });
           },
+          agents,
         );
       }
 

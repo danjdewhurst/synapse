@@ -252,8 +252,9 @@ export async function triggerAgentResponses(
   onMessage?: OnMessageCallback,
   responseMode: ResponseMode = "concurrent",
   onBeforeAgent?: OnBeforeAgentCallback,
+  agents?: Agent[],
 ): Promise<void> {
-  const agents = getAgentsForThread(db, threadId);
+  agents = agents ?? getAgentsForThread(db, threadId);
 
   if (agents.length === 0) {
     return;

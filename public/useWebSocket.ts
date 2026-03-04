@@ -67,12 +67,16 @@ export function useWebSocket({ threadId, onMessage, onTyping }: UseWebSocketOpti
     setIsConnected(false);
   }, []);
 
-  const sendMessage = useCallback((content: string) => {
+  const sendMessage = useCallback((content: string, mentionedAgentIds?: number[]) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
       throw new Error("WebSocket not connected");
     }
 
-    wsRef.current.send(JSON.stringify({ content }));
+    const payload: { content: string; mentionedAgentIds?: number[] } = { content };
+    if (mentionedAgentIds && mentionedAgentIds.length > 0) {
+      payload.mentionedAgentIds = mentionedAgentIds;
+    }
+    wsRef.current.send(JSON.stringify(payload));
   }, []);
 
   useEffect(() => {

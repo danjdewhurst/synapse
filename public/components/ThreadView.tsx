@@ -12,7 +12,7 @@ interface ThreadViewProps {
   typingAgentIds: number[];
   isConnected: boolean;
   hasMoreMessages: boolean;
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, mentionedAgentIds?: number[]) => void;
   onThreadAgentsChange: (agentIds: number[]) => void;
   onResponseModeChange: (mode: ResponseMode) => void;
   onLoadEarlierMessages: () => void;
@@ -38,8 +38,22 @@ export function ThreadView({
   onLoadEarlierMessages,
 }: ThreadViewProps) {
   const [input, setInput] = useState("");
+  const [mentionedAgentIds, setMentionedAgentIds] = useState<number[]>([]);
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionCursorStart, setMentionCursorStart] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Agents available for mention (active + assigned to thread)
+  const mentionableAgents = agents.filter(
+    (a) => a.is_active && threadAgentIds.includes(a.id),
+  );
+
+  const filteredMentionAgents = mentionableAgents.filter((a) =>
+    a.name.toLowerCase().includes(mentionFilter.toLowerCase()),
+  );
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -53,13 +67,97 @@ export function ThreadView({
     ta.style.height = `${Math.min(ta.scrollHeight, 150)}px`;
   }, []);
 
+  // Reset mention index when filter changes
+  useEffect(() => {
+    setMentionIndex(0);
+  }, [mentionFilter]);
+
+  const insertMention = (agent: Agent) => {
+    const before = input.slice(0, mentionCursorStart);
+    const after = input.slice(textareaRef.current?.selectionStart ?? input.length);
+    const mentionText = `@${agent.name} `;
+    setInput(before + mentionText + after);
+    setShowMentionDropdown(false);
+    setMentionFilter("");
+    if (!mentionedAgentIds.includes(agent.id)) {
+      setMentionedAgentIds((prev) => [...prev, agent.id]);
+    }
+    // Focus textarea after inserting
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        const cursorPos = before.length + mentionText.length;
+        ta.focus();
+        ta.setSelectionRange(cursorPos, cursorPos);
+      }
+    });
+  };
+
   const handleSend = () => {
     if (!input.trim()) return;
-    onSendMessage(input.trim());
+    onSendMessage(input.trim(), mentionedAgentIds.length > 0 ? mentionedAgentIds : undefined);
     setInput("");
+    setMentionedAgentIds([]);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setInput(value);
+
+    // Check for @ trigger
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const atMatch = textBeforeCursor.match(/(^|\s)@(\w*)$/);
+
+    if (atMatch) {
+      const filterText = atMatch[2] ?? "";
+      setShowMentionDropdown(true);
+      setMentionFilter(filterText);
+      setMentionCursorStart(cursorPos - filterText.length - 1); // position of @
+    } else {
+      setShowMentionDropdown(false);
+      setMentionFilter("");
+    }
+
+    // Sync mentionedAgentIds with actual @mentions in text
+    const mentionedNames = new Set(
+      [...value.matchAll(/@([\w\s]+?)(?=\s@|\s{2}|$)/g)].map((m) => m[1].trim()),
+    );
+    setMentionedAgentIds(
+      mentionableAgents
+        .filter((a) => mentionedNames.has(a.name))
+        .map((a) => a.id),
+    );
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Handle mention dropdown navigation
+    if (showMentionDropdown && filteredMentionAgents.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev + 1) % filteredMentionAgents.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((prev) =>
+          prev <= 0 ? filteredMentionAgents.length - 1 : prev - 1,
+        );
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        const selected = filteredMentionAgents[mentionIndex];
+        if (selected) insertMention(selected);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowMentionDropdown(false);
+        return;
+      }
+    }
+
     // Enter or Ctrl/Cmd+Enter sends; Shift+Enter inserts newline
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -73,6 +171,15 @@ export function ThreadView({
     // Fallback to client-side lookup for legacy messages
     const agent = agents.find((a) => a.id === message.agent_id);
     return agent ? `${agent.avatar_emoji} ${agent.name}` : "Unknown";
+  };
+
+  /** Preprocess message content to bold @AgentName mentions */
+  const highlightMentions = (content: string): string => {
+    const agentNames = mentionableAgents.map((a) => a.name);
+    if (agentNames.length === 0) return content;
+    const escaped = agentNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const pattern = new RegExp(`@(${escaped.join("|")})`, "g");
+    return content.replace(pattern, "**@$1**");
   };
 
   const activeAgents = agents.filter((a) => a.is_active);
@@ -229,7 +336,7 @@ export function ThreadView({
                 </span>
               </div>
               <div className="message-content">
-                <Markdown remarkPlugins={[remarkGfm]}>{message.content}</Markdown>
+                <Markdown remarkPlugins={[remarkGfm]}>{highlightMentions(message.content)}</Markdown>
               </div>
             </div>
           ))
@@ -258,16 +365,37 @@ export function ThreadView({
       </div>
 
       <div className="message-input-container">
-        <textarea
-          ref={textareaRef}
-          className="message-textarea"
-          placeholder="Type a message… (Shift+Enter for new line)"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={!isConnected}
-          rows={1}
-        />
+        <div className="message-input-wrapper">
+          {showMentionDropdown && filteredMentionAgents.length > 0 && (
+            <div className="mention-dropdown">
+              {filteredMentionAgents.map((agent, i) => (
+                <button
+                  key={agent.id}
+                  type="button"
+                  className={`mention-option ${i === mentionIndex ? "active" : ""}`}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    insertMention(agent);
+                  }}
+                  onMouseEnter={() => setMentionIndex(i)}
+                >
+                  <span>{agent.avatar_emoji}</span>
+                  <span>{agent.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <textarea
+            ref={textareaRef}
+            className="message-textarea"
+            placeholder="Type a message… Use @ to mention agents"
+            value={input}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            disabled={!isConnected}
+            rows={1}
+          />
+        </div>
         <Button onClick={handleSend} disabled={!input.trim() || !isConnected}>
           Send
         </Button>
